@@ -1,3 +1,36 @@
+# Build and distribution files
+dist/
+dist-packager/
+build/
+out/
+installer/
+
+# Executable and runtime files
+*.exe
+*.dll
+*.pak
+*.bin
+*.dat
+chrome_*_percent.pak
+snapshot_blob.bin
+v8_context_snapshot.bin
+icudtl.dat
+version
+*.json.backup
+
+# Electron specific runtime files
+libEGL.dll
+libGLESv2.dll
+d3dcompiler_47.dll
+ffmpeg.dll
+vk_swiftshader*
+vulkan-1.dll
+resources.pak
+
+# Node modules
+node_modules/
+**/node_modules/
+
 # System files
 .DS_Store
 Thumbs.db
