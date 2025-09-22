@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MortgagePros™ Calculator</title>
+  <link rel="stylesheet" href="../node_modules/bootstrap/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container-fluid p-3 main-container">
+    <!-- Header with Logo and Title - No Bottom Margin -->
+    <header class="row mb-0 align-items-center fade-in-up">
+      <div class="col-md-3" style="padding-top: 0; padding-bottom: 0;">
+        <img id="logo" alt="MortgagePros Logo" class="logo" style="max-height: 120px; width: auto; padding: 0; margin-top: 0; margin-bottom: 0;">
+      </div>
+      <div class="col-md-7 text-center" style="padding-top: 0; padding-bottom: 0;">
+        <h1 class="title-text mb-0" style="margin-bottom: 0 !important;">MortgagePros Calculator</h1>
+        <p class="subtitle-text mb-0" style="margin-top: 8px !important; margin-bottom: 0 !important;">Professional • Accurate • Fast</p>
+      </div>
+      <div class="col-md-2 text-end">
+        <div class="badge bg-gradient text-white px-2 py-1" style="background: linear-gradient(135deg, #1e40af, #3b82f6); font-size: 0.7rem;">
+          v11.0.0
+        </div>
+      </div>
+    </header>
+
+    <!-- Custom Notification Area -->
+    <div id="notificationArea" class="row mb-3" style="display: none;">
+      <div class="col-12">
+        <div id="notificationMessage" class="alert alert-dismissible fade show" role="alert">
+          <span id="notificationText"></span>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Layout - Two Columns -->
+    <div class="row" style="margin-top: 0;">
+      <!-- Calculator Column -->
+      <div class="col-lg-8">
+        <!-- Calculator Input Section with Tabs - No Top Margin -->
+        <section class="calculator-section mb-2 fade-in-up" style="margin-top: 0;">
+          <div class="card">
+            <div class="card-header text-white">
+              <div class="d-flex justify-content-between align-items-center">
+                <h6 class="mb-0" style="font-size: 0.9rem;">Mortgage Calculator</h6>
+                <div class="d-flex gap-1 align-items-center">
+                  <select id="historySelect" class="form-select form-select-sm bg-white bg-opacity-75" style="width: auto; min-width: 160px; border-radius: 4px; font-size: 0.75rem; padding: 4px 8px;">
+                    <option value="">Load Previous Calculation</option>
+                  </select>
+                  <button type="button" id="clearHistoryBtn" class="btn btn-outline-light btn-sm" style="border-radius: 4px; font-size: 0.75rem; padding: 4px 8px;">Clear</button>
+                </div>
+              </div>
+          <!-- Calculator Type Tabs -->
+          <ul class="nav nav-tabs mt-2" id="calculatorTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="refinance-tab" data-bs-toggle="tab" data-bs-target="#refinance" type="button" role="tab">Refinance</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="purchase-tab" data-bs-toggle="tab" data-bs-target="#purchase" type="button" role="tab">Purchase</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="heloc-tab" data-bs-toggle="tab" data-bs-target="#heloc" type="button" role="tab">HELOC</button>
+            </li>
+          </ul>
+        </div>
+        <div class="card-body">
+          <div class="tab-content" id="calculatorTabContent">
+            
+            <!-- Refinance Tab (Primary) -->
+            <div class="tab-pane fade show active" id="refinance" role="tabpanel">
+              <form id="refinanceForm">
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label for="appraisedValue">Appraised Value ($):<span class="required">*</span></label>
+                      <input type="text" inputmode="numeric" id="appraisedValue" class="form-control" value="0">
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label for="refinanceLoanAmount">Loan Amount ($):<span class="required">*</span></label>
+                      <input type="text" inputmode="numeric" id="refinanceLoanAmount" class="form-control" value="0">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label for="refinanceInterestRate">Interest Rate (%):<span class="required">*</span></label>
+                      <input type="text" inputmode="decimal" id="refinanceInterestRate" class="form-control" value="0">
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label for="refinanceLoanTerm">Loan Term (Years):<span class="required">*</span></label>
+                      <input type="text" inputmode="numeric" id="refinanceLoanTerm" class="form-control" value="0">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label for="refinancePmiAmount" id="refinancePmiLabel">PMI Monthly Amount ($):</label>
+                        <div class="form-check form-switch">
+                          <input class="form-check-input" type="checkbox" id="refinancePmiToggle">
+                          <label class="form-check-label" for="refinancePmiToggle" id="refinancePmiToggleLabel">
+                            Monthly
+                          </label>
+                        </div>
+                      </div>
+                      <input type="text" inputmode="decimal" id="refinancePmiAmount" class="form-control" value="0" placeholder="e.g., 125">
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label for="refinancePropertyTax">Property Tax (%):</label>
+                      <input type="text" inputmode="decimal" id="refinancePropertyTax" class="form-control" value="0">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label for="refinanceHomeInsurance">Home Insurance (Monthly $):</label>
+                      <input type="text" inputmode="numeric" id="refinanceHomeInsurance" class="form-control" value="0">
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label for="refinanceExtraPayment">Extra Monthly Payment ($):</label>
+                      <input type="text" inputmode="numeric" id="refinanceExtraPayment" class="form-control" value="0">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row mb-3">
+                  <div class="col-md-12 d-flex justify-content-start">
+                    <button type="button" id="calculateRefinanceBtn" class="btn btn-primary me-2">Calculate Refinance</button>
+                    <button type="button" id="exportRefinanceReportBtn" class="btn btn-success">Export Report</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <!-- Purchase Tab (Secondary) -->
+            <div class="tab-pane fade" id="purchase" role="tabpanel">
+              <form id="mortgageForm">
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="propertyValue">Property Value ($):<span class="required">*</span></label>
+                  <input type="text" inputmode="numeric" id="propertyValue" class="form-control" value="0">
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="downPaymentAmount">Down Payment ($):<span class="required">*</span></label>
+                  <input type="text" inputmode="numeric" id="downPaymentAmount" class="form-control" value="0">
+                </div>
+              </div>
+            </div>
+
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="downPaymentPercent">Down Payment (%):<span class="required">*</span></label>
+                  <input type="text" inputmode="decimal" id="downPaymentPercent" class="form-control" value="0">
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="loanTerm">Loan Term (Years):<span class="required">*</span></label>
+                  <input type="text" inputmode="numeric" id="loanTerm" class="form-control" value="0">
+                </div>
+              </div>
+            </div>
+
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="interestRate">Interest Rate (%):<span class="required">*</span></label>
+                  <input type="text" inputmode="decimal" id="interestRate" class="form-control" value="0">
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="propertyTax">Property Tax (%):</label>
+                  <input type="text" inputmode="decimal" id="propertyTax" class="form-control" value="0">
+                </div>
+              </div>
+            </div>
+
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="homeInsurance">Home Insurance ($):</label>
+                  <input type="text" inputmode="numeric" id="homeInsurance" class="form-control" value="0">
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="hoa">Monthly HOA/Other ($):</label>
+                  <input type="text" inputmode="decimal" id="hoa" class="form-control" value="0">
+                </div>
+              </div>
+            </div>
+
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="pmiRate">PMI Rate (%):</label>
+                  <input type="text" inputmode="decimal" id="pmiRate" class="form-control" value="0">
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label for="extraPayment">Extra Monthly Payment ($):</label>
+                  <input type="text" inputmode="numeric" id="extraPayment" class="form-control" value="0">
+                </div>
+              </div>
+            </div>
+
+            <div class="row mb-3">
+              <div class="col-md-12 d-flex justify-content-start">
+                <button type="button" id="calculateBtn" class="btn btn-primary me-2">Calculate Mortgage</button>
+                <button type="button" id="exportReportBtn" class="btn btn-success">Export Report</button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+            <!-- HELOC Tab -->
+            <div class="tab-pane fade" id="heloc" role="tabpanel">
+              <form id="helocForm">
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label for="helocPropertyValue">Estimated Property Value ($):<span class="required">*</span></label>
+                      <input type="text" inputmode="numeric" id="helocPropertyValue" class="form-control" value="0">
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label for="helocOutstandingBalance">Outstanding Balance ($):<span class="required">*</span></label>
+                      <input type="text" inputmode="numeric" id="helocOutstandingBalance" class="form-control" value="0">
+                      <small class="form-text text-muted">All loan balances (mortgage, home equity, etc.)</small>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label for="helocLoanAmount">HELOC Loan Amount ($):<span class="required">*</span></label>
+                      <input type="text" inputmode="numeric" id="helocLoanAmount" class="form-control" value="0">
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label for="helocInterestRate">Interest Rate (%):<span class="required">*</span></label>
+                      <input type="text" inputmode="decimal" id="helocInterestRate" class="form-control" value="0">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label for="helocInterestOnlyPeriod">Interest-Only Period (Years):<span class="required">*</span></label>
+                      <input type="text" inputmode="numeric" id="helocInterestOnlyPeriod" class="form-control" value="10">
+                      <small class="form-text text-muted">Typically 10-15 years</small>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label for="helocRepaymentPeriod">Repayment Period (Years):<span class="required">*</span></label>
+                      <input type="text" inputmode="numeric" id="helocRepaymentPeriod" class="form-control" value="20">
+                      <small class="form-text text-muted">Total loan term including interest-only period</small>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row mb-3">
+                  <div class="col-md-12 d-flex justify-content-start">
+                    <button type="button" id="calculateHelocBtn" class="btn btn-primary me-2">Calculate HELOC</button>
+                    <button type="button" id="exportHelocReportBtn" class="btn btn-success">Export Report</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+        
+        </div> <!-- End tab-content -->
+        </div> <!-- End card-body -->
+        </div>
+        </section>
+      </div>
+      
+      <!-- Payment Summary Column -->
+      <div class="col-lg-4">
+        <!-- Results Summary Section -->
+        <section id="resultsSummary" class="results-section mb-2 fade-in-up" style="display: block; margin-top: 0;">
+          <div class="card">
+            <div class="card-header text-white" style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%) !important;">
+              <h6 class="mb-0" style="font-size: 0.9rem;">Payment Summary</h6>
+            </div>
+            <div class="card-body">
+              <!-- Two column grid layout for right panel -->
+              <div class="row">
+                <div class="col-6">
+                  <div class="result-item">
+                    <h6>Monthly Payment</h6>
+                    <p id="monthlyPayment" class="result-value">$0</p>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="result-item">
+                    <h6>Loan Amount</h6>
+                    <p id="loanAmount" class="result-value">$0</p>
+                  </div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-6">
+                  <div class="result-item">
+                    <h6>Total Interest</h6>
+                    <p id="totalInterest" class="result-value">$0</p>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="result-item">
+                    <h6>Principal & Interest</h6>
+                    <p id="principalInterest" class="result-value">$0</p>
+                  </div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-6">
+                  <div class="result-item">
+                    <h6>Property Tax</h6>
+                    <p id="propertyTaxAmount" class="result-value">$0</p>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="result-item">
+                    <h6>Home Insurance</h6>
+                    <p id="insuranceAmount" class="result-value">$0</p>
+                  </div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-6">
+                  <div class="result-item">
+                    <h6>PMI</h6>
+                    <p id="pmiAmount" class="result-value">$0</p>
+                  </div>
+                </div>
+                <div class="col-6" id="hoaSummarySection">
+                  <div class="result-item">
+                    <h6>HOA/Other</h6>
+                    <p id="hoaAmount" class="result-value">$0</p>
+                  </div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-6">
+                  <div class="result-item">
+                    <h6>Extra Payment</h6>
+                    <p id="extraAmount" class="result-value">$0</p>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="result-item">
+                    <h6>Total Cost</h6>
+                    <p id="totalCost" class="result-value">$0</p>
+                  </div>
+                </div>
+              </div>
+        </div>
+        </div>
+        </section>
+      </div>
+    </div> <!-- End two-column layout -->
+
+    <!-- Tabs Section -->
+    <section class="tabs-section mb-4" id="tabsSection" style="display: none;">
+      <div class="card">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">Loan Analysis & Schedule</h5>
+          <ul class="nav nav-tabs mt-2" id="mortgageTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary" type="button" role="tab" aria-controls="summary" aria-selected="true">Payment Summary & Analysis</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="chart-tab" data-bs-toggle="tab" data-bs-target="#chart" type="button" role="tab" aria-controls="chart" aria-selected="false">Payment Visualization</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="schedule-tab" data-bs-toggle="tab" data-bs-target="#schedule" type="button" role="tab" aria-controls="schedule" aria-selected="false">Amortization Schedule</button>
+            </li>
+          </ul>
+        </div>
+        <div class="card-body">
+      <div class="tab-content" id="mortgageTabsContent">
+        <!-- Summary Tab -->
+        <div class="tab-pane fade show active" id="summary" role="tabpanel" aria-labelledby="summary-tab">
+          <div class="card">
+            <div class="card-body">
+              <h5>Loan Analysis</h5>
+              <div class="row">
+                <div class="col-md-6">
+                  <p><strong>Principal & Interest:</strong> <span id="summaryPI">$0.00</span></p>
+                  <p><strong>Taxes & Insurance:</strong> <span id="summaryTI">$0.00</span></p>
+                  <p><strong>PMI:</strong> <span id="summaryPMI">$0.00</span></p>
+                </div>
+                <div class="col-md-6">
+                  <p id="summaryHOASection"><strong>HOA/Other:</strong> <span id="summaryHOA">$0.00</span></p>
+                  <p><strong>Loan-to-Value Ratio:</strong> <span id="summaryLTV">0%</span></p>
+                  <p><strong>Total Interest Paid:</strong> <span id="summaryTotalInterest">$0.00</span></p>
+                  <p><strong>Loan Payoff Date:</strong> <span id="summaryPayoffDate">--</span></p>
+                  <p id="extraPaymentSavings" style="display: none; color: #28a745; font-weight: bold;"></p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Chart Tab -->
+        <div class="tab-pane fade" id="chart" role="tabpanel" aria-labelledby="chart-tab">
+          <div class="card">
+            <div class="card-body">
+              <h5>Principal vs Interest Over Time</h5>
+              <canvas id="amortizationChart" width="400" height="300"></canvas>
+              
+              <h5 class="mt-4">Loan Balance Over Time</h5>
+              <canvas id="balanceChart" width="400" height="300"></canvas>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Schedule Tab -->
+        <div class="tab-pane fade" id="schedule" role="tabpanel" aria-labelledby="schedule-tab">
+          <div class="card">
+            <div class="card-body">
+              <div class="mb-3">
+                <button id="exportCsvBtn" class="btn btn-primary me-2">Export to CSV</button>
+                <button id="exportPdfBtn" class="btn btn-secondary">Export to PDF</button>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-striped" id="amortizationTable">
+                  <thead>
+                    <tr>
+                      <th>Payment #</th>
+                      <th>Payment Date</th>
+                      <th>Payment Amount</th>
+                      <th>Principal</th>
+                      <th>Extra Payment</th>
+                      <th>Interest</th>
+                      <th>Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody id="scheduleTableBody">
+                    <!-- Will be populated by JavaScript -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div> <!-- End card-body -->
+      </div> <!-- End card -->
+    </section>
+  </div>
+
+  <!-- Error Modal -->
+  <div class="modal fade" id="errorModal" tabindex="-1" aria-labelledby="errorModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title" id="errorModalLabel">Input Error</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="errorModalBody">
+          <!-- Error message will be inserted here -->
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Include JavaScript dependencies -->
+  <script src="../node_modules/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+  <script src="../node_modules/jspdf/dist/jspdf.umd.min.js"></script>
+  <script src="../node_modules/papaparse/papaparse.min.js"></script>
+  <script src="mortgage-calculator.js"></script>
+</body>
+</html>
