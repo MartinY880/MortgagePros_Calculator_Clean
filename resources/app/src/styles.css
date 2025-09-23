@@ -1198,6 +1198,43 @@ header.row {
   );
   border-color: rgba(16, 185, 129, 0.4);
   color: #34d399;
+  border-left-color: #10b981;
+}
+
+/* Dark Mode Tab Content Fixes */
+[data-theme="dark"] .tab-content {
+  background: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .tab-pane {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Dark Mode Tab Navigation Fixes */
+[data-theme="dark"] .nav-tabs .nav-link.active {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .nav-tabs .nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Dark Mode Best Option Summary Text Override */
+[data-theme="dark"] #comparisonWinner,
+[data-theme="dark"] #comparisonWinner *,
+[data-theme="dark"] #comparisonWinner .fw-bold,
+[data-theme="dark"] #comparisonWinner h3,
+[data-theme="dark"] #comparisonWinner h4,
+[data-theme="dark"] #comparisonWinner h5,
+[data-theme="dark"] #comparisonWinner p,
+[data-theme="dark"] #comparisonWinner span,
+[data-theme="dark"] #comparisonWinner div {
+  color: #34d399 !important;
+  background: transparent !important;
 }
 
 /* Responsive Design for Comparison */
