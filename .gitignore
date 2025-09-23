@@ -6,8 +6,6 @@ out/
 installer/
 
 # Executable and runtime files - exclude from repository
-*.exe
-MortgagePros Calculator.exe
 *.dll
 *.pak
 *.bin
