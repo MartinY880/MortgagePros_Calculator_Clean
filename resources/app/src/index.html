@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MortgagePros™ Calculator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../node_modules/bootstrap/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -18,7 +21,11 @@
         <h1 class="title-text mb-0" style="margin-bottom: 0 !important;">MortgagePros Calculator</h1>
         <p class="subtitle-text mb-0" style="margin-top: 8px !important; margin-bottom: 0 !important;">Professional • Accurate • Fast</p>
       </div>
-      <div class="col-md-2 text-end">
+      <div class="col-md-2 text-end d-flex flex-column align-items-end gap-2">
+        <button id="themeToggle" class="theme-toggle" type="button" title="Toggle Dark Mode">
+          <span class="icon">🌙</span>
+          <span class="theme-text">Dark</span>
+        </button>
         <div class="badge bg-gradient text-white px-2 py-1" style="background: linear-gradient(135deg, #1e40af, #3b82f6); font-size: 0.7rem;">
           v11.0.0
         </div>
@@ -58,6 +65,12 @@
               <button class="nav-link active" id="refinance-tab" data-bs-toggle="tab" data-bs-target="#refinance" type="button" role="tab">Refinance</button>
             </li>
             <li class="nav-item" role="presentation">
+              <button class="nav-link" id="comparison-tab" data-bs-toggle="tab" data-bs-target="#comparison" type="button" role="tab">Compare Loans</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="blended-tab" data-bs-toggle="tab" data-bs-target="#blended" type="button" role="tab">Blended Mortgage</button>
+            </li>
+            <li class="nav-item" role="presentation">
               <button class="nav-link" id="purchase-tab" data-bs-toggle="tab" data-bs-target="#purchase" type="button" role="tab">Purchase</button>
             </li>
             <li class="nav-item" role="presentation">
@@ -74,7 +87,7 @@
                 <div class="row mb-3">
                   <div class="col-md-6">
                     <div class="form-group">
-                      <label for="appraisedValue">Appraised Value ($):<span class="required">*</span></label>
+                      <label for="appraisedValue">Appraised Value ($):</label>
                       <input type="text" inputmode="numeric" id="appraisedValue" class="form-control" value="0">
                     </div>
                   </div>
@@ -143,6 +156,341 @@
                   <div class="col-md-12 d-flex justify-content-start">
                     <button type="button" id="calculateRefinanceBtn" class="btn btn-primary me-2">Calculate Refinance</button>
                     <button type="button" id="exportRefinanceReportBtn" class="btn btn-success">Export Report</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <!-- Comparison Tab -->
+            <div class="tab-pane fade" id="comparison" role="tabpanel">
+              <form id="comparisonForm">
+                <div class="row mb-4">
+                  <div class="col-12">
+                    <div class="alert alert-info">
+                      <strong>📊 Loan Comparison Tool</strong><br>
+                      Compare up to 3 different loan scenarios side-by-side to find the best option for your needs.
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Loan Comparison Cards -->
+                <div class="row" id="comparisonRow">
+                  <!-- Current Loan -->
+                  <div class="col-lg-6 comparison-column" id="loanA_column">
+                    <div class="card comparison-loan-card">
+                      <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0">🏠 Current Loan</h6>
+                      </div>
+                      <div class="card-body">
+                        <div class="form-group mb-3">
+                          <label for="loanA_name">Loan Name:</label>
+                          <input type="text" id="loanA_name" class="form-control" placeholder="e.g., Current Loan" value="Current Loan">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanA_appraisedValue">Appraised Value ($):</label>
+                          <input type="text" inputmode="numeric" id="loanA_appraisedValue" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanA_amount">Loan Amount ($):<span class="required">*</span></label>
+                          <input type="text" inputmode="numeric" id="loanA_amount" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanA_rate">Interest Rate (%):<span class="required">*</span></label>
+                          <input type="text" inputmode="decimal" id="loanA_rate" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanA_term">Loan Term (Years):<span class="required">*</span></label>
+                          <input type="text" inputmode="numeric" id="loanA_term" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label for="loanA_pmi" id="loanA_pmiLabel">PMI Monthly Amount ($):</label>
+                            <div class="form-check form-switch">
+                              <input class="form-check-input" type="checkbox" id="loanA_pmiToggle">
+                              <label class="form-check-label" for="loanA_pmiToggle" id="loanA_pmiToggleLabel">
+                                Monthly
+                              </label>
+                            </div>
+                          </div>
+                          <input type="text" inputmode="decimal" id="loanA_pmi" class="form-control" value="0" placeholder="e.g., 125">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanA_propertyTax">Property Tax (%):</label>
+                          <input type="text" inputmode="decimal" id="loanA_propertyTax" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanA_homeInsurance">Home Insurance (Monthly $):</label>
+                          <input type="text" inputmode="numeric" id="loanA_homeInsurance" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanA_extra">Extra Monthly Payment ($):</label>
+                          <input type="text" inputmode="numeric" id="loanA_extra" class="form-control" value="0">
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Loan Option A -->
+                  <div class="col-lg-6 comparison-column" id="loanB_column">
+                    <div class="card comparison-loan-card">
+                      <div class="card-header bg-success text-white">
+                        <h6 class="mb-0">📋 Loan Option A</h6>
+                      </div>
+                      <div class="card-body">
+                        <div class="form-group mb-3">
+                          <label for="loanB_name">Loan Name:</label>
+                          <input type="text" id="loanB_name" class="form-control" placeholder="e.g., New Loan Option" value="Option A">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanB_appraisedValue">Appraised Value ($):</label>
+                          <input type="text" inputmode="numeric" id="loanB_appraisedValue" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanB_amount">Loan Amount ($):<span class="required">*</span></label>
+                          <input type="text" inputmode="numeric" id="loanB_amount" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanB_rate">Interest Rate (%):<span class="required">*</span></label>
+                          <input type="text" inputmode="decimal" id="loanB_rate" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanB_term">Loan Term (Years):<span class="required">*</span></label>
+                          <input type="text" inputmode="numeric" id="loanB_term" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label for="loanB_pmi" id="loanB_pmiLabel">PMI Monthly Amount ($):</label>
+                            <div class="form-check form-switch">
+                              <input class="form-check-input" type="checkbox" id="loanB_pmiToggle">
+                              <label class="form-check-label" for="loanB_pmiToggle" id="loanB_pmiToggleLabel">
+                                Monthly
+                              </label>
+                            </div>
+                          </div>
+                          <input type="text" inputmode="decimal" id="loanB_pmi" class="form-control" value="0" placeholder="e.g., 125">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanB_propertyTax">Property Tax (%):</label>
+                          <input type="text" inputmode="decimal" id="loanB_propertyTax" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanB_homeInsurance">Home Insurance (Monthly $):</label>
+                          <input type="text" inputmode="numeric" id="loanB_homeInsurance" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanB_extra">Extra Monthly Payment ($):</label>
+                          <input type="text" inputmode="numeric" id="loanB_extra" class="form-control" value="0">
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Loan Option B -->
+                  <div class="col-lg-4 comparison-column d-none" id="loanC_column">
+                    <div class="card comparison-loan-card">
+                      <div class="card-header bg-warning text-white">
+                        <h6 class="mb-0">📋 Loan Option B</h6>
+                      </div>
+                      <div class="card-body">
+                        <div class="form-group mb-3">
+                          <label for="loanC_name">Loan Name:</label>
+                          <input type="text" id="loanC_name" class="form-control" placeholder="e.g., Alternative Option" value="Option B">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanC_appraisedValue">Appraised Value ($):</label>
+                          <input type="text" inputmode="numeric" id="loanC_appraisedValue" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanC_amount">Loan Amount ($):<span class="required">*</span></label>
+                          <input type="text" inputmode="numeric" id="loanC_amount" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanC_rate">Interest Rate (%):<span class="required">*</span></label>
+                          <input type="text" inputmode="decimal" id="loanC_rate" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanC_term">Loan Term (Years):<span class="required">*</span></label>
+                          <input type="text" inputmode="numeric" id="loanC_term" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label for="loanC_pmi" id="loanC_pmiLabel">PMI Monthly Amount ($):</label>
+                            <div class="form-check form-switch">
+                              <input class="form-check-input" type="checkbox" id="loanC_pmiToggle">
+                              <label class="form-check-label" for="loanC_pmiToggle" id="loanC_pmiToggleLabel">
+                                Monthly
+                              </label>
+                            </div>
+                          </div>
+                          <input type="text" inputmode="decimal" id="loanC_pmi" class="form-control" value="0" placeholder="e.g., 125">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanC_propertyTax">Property Tax (%):</label>
+                          <input type="text" inputmode="decimal" id="loanC_propertyTax" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanC_homeInsurance">Home Insurance (Monthly $):</label>
+                          <input type="text" inputmode="numeric" id="loanC_homeInsurance" class="form-control" value="0">
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanC_extra">Extra Monthly Payment ($):</label>
+                          <input type="text" inputmode="numeric" id="loanC_extra" class="form-control" value="0">
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Add Option B Button -->
+                <div class="row mb-3 mt-3">
+                  <div class="col-12 d-flex justify-content-center">
+                    <button type="button" id="addOption2Btn" class="btn btn-outline-primary">➕ Add Option B</button>
+                    <button type="button" id="removeOption2Btn" class="btn btn-outline-danger d-none ms-2">✖️ Remove Option B</button>
+                  </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="row mb-3 mt-4">
+                  <div class="col-12 d-flex justify-content-center gap-3">
+                    <button type="button" id="compareLoansBtn" class="btn btn-primary btn-lg">🔍 Compare Loans</button>
+                    <button type="button" id="exportComparisonReportBtn" class="btn btn-success">📄 Export Comparison</button>
+                    <button type="button" id="clearComparisonBtn" class="btn btn-outline-secondary">🔄 Clear All</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <!-- Blended Mortgage Tab -->
+            <div class="tab-pane fade" id="blended" role="tabpanel">
+              <form id="blendedForm">
+                <div class="row g-3">
+                  <!-- Blended Mortgage Explanation -->
+                  <div class="col-12">
+                    <div class="alert alert-info">
+                      <h6 class="alert-heading mb-2">🏠 Blended Mortgage Calculator</h6>
+                      <p class="mb-0">Calculate payments for mortgages with multiple components (e.g., fixed + variable rates, first mortgage + HELOC, or different rate periods).</p>
+                    </div>
+                  </div>
+
+                  <!-- Property Information -->
+                  <div class="col-12">
+                    <h6 class="section-title">Property Information</h6>
+                  </div>
+                  <div class="col-md-6">
+                    <label for="blendedHomeValue" class="form-label">Home Value</label>
+                    <div class="input-group">
+                      <span class="input-group-text">$</span>
+                      <input type="text" class="form-control currency-input" id="blendedHomeValue" placeholder="500,000">
+                    </div>
+                  </div>
+
+                  <!-- First Mortgage Component -->
+                  <div class="col-12 mt-4">
+                    <h6 class="section-title">First Mortgage Component</h6>
+                  </div>
+                  <div class="col-md-4">
+                    <label for="firstMortgageAmount" class="form-label">Loan Amount</label>
+                    <div class="input-group">
+                      <span class="input-group-text">$</span>
+                      <input type="text" class="form-control currency-input" id="firstMortgageAmount" placeholder="320,000">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <label for="firstMortgageRate" class="form-label">Interest Rate</label>
+                    <div class="input-group">
+                      <input type="text" class="form-control percentage-input" id="firstMortgageRate" placeholder="6.50">
+                      <span class="input-group-text">%</span>
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <label for="firstMortgageTerm" class="form-label">Term (Years)</label>
+                    <input type="number" class="form-control" id="firstMortgageTerm" value="30" min="5" max="50">
+                  </div>
+
+                  <!-- Second Component (HELOC/Line of Credit) -->
+                  <div class="col-12 mt-4">
+                    <h6 class="section-title">Second Component (HELOC/Line of Credit)</h6>
+                  </div>
+                  <div class="col-md-4">
+                    <label for="secondMortgageAmount" class="form-label">Credit Limit/Amount</label>
+                    <div class="input-group">
+                      <span class="input-group-text">$</span>
+                      <input type="text" class="form-control currency-input" id="secondMortgageAmount" placeholder="80,000">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <label for="secondMortgageRate" class="form-label">Interest Rate</label>
+                    <div class="input-group">
+                      <input type="text" class="form-control percentage-input" id="secondMortgageRate" placeholder="8.25">
+                      <span class="input-group-text">%</span>
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <label for="secondMortgageType" class="form-label">Type</label>
+                    <select class="form-select" id="secondMortgageType">
+                      <option value="heloc">HELOC (Interest Only)</option>
+                      <option value="fixed">Fixed Term Loan</option>
+                      <option value="variable">Variable Rate</option>
+                    </select>
+                  </div>
+
+                  <!-- Second Component Term (only for fixed loans) -->
+                  <div class="col-md-4" id="secondTermContainer" style="display: none;">
+                    <label for="secondMortgageTerm" class="form-label">Term (Years)</label>
+                    <input type="number" class="form-control" id="secondMortgageTerm" value="15" min="5" max="30">
+                  </div>
+
+                  <!-- Additional Component Loans -->
+                  <div class="col-12 mt-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                      <h6 class="section-title mb-0">Additional Component Loans</h6>
+                      <button type="button" id="addComponentBtn" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-plus"></i> Add Component
+                      </button>
+                    </div>
+                    <div id="additionalComponents" class="row g-3">
+                      <!-- Dynamic components will be added here -->
+                    </div>
+                  </div>
+
+                  <!-- Additional Costs -->
+                  <div class="col-12 mt-4">
+                    <h6 class="section-title">Additional Monthly Costs</h6>
+                  </div>
+                  <div class="col-md-3">
+                    <label for="blendedPropertyTax" class="form-label">Property Tax</label>
+                    <div class="input-group">
+                      <span class="input-group-text">$</span>
+                      <input type="text" class="form-control currency-input" id="blendedPropertyTax" placeholder="500">
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <label for="blendedInsurance" class="form-label">Home Insurance</label>
+                    <div class="input-group">
+                      <span class="input-group-text">$</span>
+                      <input type="text" class="form-control currency-input" id="blendedInsurance" placeholder="150">
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <label for="blendedPMI" class="form-label">PMI</label>
+                    <div class="input-group">
+                      <span class="input-group-text">$</span>
+                      <input type="text" class="form-control currency-input" id="blendedPMI" placeholder="0">
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <label for="blendedOther" class="form-label">Other (HOA, etc.)</label>
+                    <div class="input-group">
+                      <span class="input-group-text">$</span>
+                      <input type="text" class="form-control currency-input" id="blendedOther" placeholder="0">
+                    </div>
+                  </div>
+
+                  <!-- Calculate Button -->
+                  <div class="col-12 text-center mt-4">
+                    <button type="button" id="calculateBlendedBtn" class="btn btn-primary btn-lg">💰 Calculate Blended Mortgage</button>
+                    <button type="button" id="exportBlendedReportBtn" class="btn btn-success">📄 Export Report</button>
+                    <button type="button" id="clearBlendedBtn" class="btn btn-outline-secondary">🔄 Clear Form</button>
                   </div>
                 </div>
               </form>
@@ -384,6 +732,99 @@
         </div>
         </div>
         </section>
+
+        <!-- Blended Mortgage Summary Section -->
+        <section id="blendedResultsSummary" class="results-section mb-2 fade-in-up" style="display: block; margin-top: 0;">
+          <div class="card">
+            <div class="card-header text-white" style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%) !important;">
+              <h6 class="mb-0" style="font-size: 0.9rem;">Blended Mortgage Analysis</h6>
+            </div>
+            <div class="card-body">
+              <!-- Payment Summary -->
+              <div id="summaryData"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Comparison Results Section -->
+        <section id="comparisonResults" class="comparison-results-section mb-3 fade-in-up">
+          <div class="card">
+            <div class="card-header text-white" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important;">
+              <h6 class="mb-0" style="font-size: 0.9rem;">🏆 Loan Comparison Results</h6>
+            </div>
+            <div class="card-body">
+              <!-- Winner Banner -->
+              <div id="comparisonWinner" class="alert alert-success mb-3" style="display: none;">
+                <strong>🎯 Best Option: </strong><span id="winnerName"></span>
+                <br><small id="winnerReason"></small>
+              </div>
+
+              <!-- Comparison Table -->
+              <div class="table-responsive">
+                <table class="table table-sm comparison-table">
+                  <thead>
+                    <tr>
+                      <th>Metric</th>
+                      <th id="loanA_header" class="text-center">Option A</th>
+                      <th id="loanB_header" class="text-center">Option B</th>
+                      <th id="loanC_header" class="text-center">Option C</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><strong>Monthly Payment</strong></td>
+                      <td id="compA_monthly" class="text-center">-</td>
+                      <td id="compB_monthly" class="text-center">-</td>
+                      <td id="compC_monthly" class="text-center">-</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Total Interest</strong></td>
+                      <td id="compA_interest" class="text-center">-</td>
+                      <td id="compB_interest" class="text-center">-</td>
+                      <td id="compC_interest" class="text-center">-</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Total Cost</strong></td>
+                      <td id="compA_total" class="text-center">-</td>
+                      <td id="compB_total" class="text-center">-</td>
+                      <td id="compC_total" class="text-center">-</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Payoff Time</strong></td>
+                      <td id="compA_payoff" class="text-center">-</td>
+                      <td id="compB_payoff" class="text-center">-</td>
+                      <td id="compC_payoff" class="text-center">-</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Closing Costs</strong></td>
+                      <td id="compA_fees" class="text-center">-</td>
+                      <td id="compB_fees" class="text-center">-</td>
+                      <td id="compC_fees" class="text-center">-</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Savings Analysis -->
+              <div id="savingsAnalysis" class="mt-3">
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="savings-item">
+                      <h6>💰 Monthly Savings vs Best Alternative</h6>
+                      <p id="monthlySavings" class="savings-value">$0</p>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="savings-item">
+                      <h6>🏦 Lifetime Interest Savings</h6>
+                      <p id="lifetimeSavings" class="savings-value">$0</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     </div> <!-- End two-column layout -->
 
@@ -499,6 +940,54 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
   <script src="../node_modules/jspdf/dist/jspdf.umd.min.js"></script>
   <script src="../node_modules/papaparse/papaparse.min.js"></script>
+  <!-- Load main application -->
   <script src="mortgage-calculator.js"></script>
+  
+  <!-- Emergency Tab Fix Script -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('Emergency tab fix script loaded');
+      
+      // Force tab functionality
+      function forceTabSwitch(tabId) {
+        console.log('Force switching to tab:', tabId);
+        
+        // Remove active from all tabs
+        document.querySelectorAll('.nav-tabs .nav-link').forEach(tab => {
+          tab.classList.remove('active');
+        });
+        
+        // Remove active from all content
+        document.querySelectorAll('.tab-content .tab-pane').forEach(pane => {
+          pane.classList.remove('active', 'show');
+        });
+        
+        // Activate selected tab and content
+        const tabButton = document.getElementById(tabId + '-tab');
+        const tabContent = document.getElementById(tabId);
+        
+        if (tabButton && tabContent) {
+          tabButton.classList.add('active');
+          tabContent.classList.add('active', 'show');
+          console.log('Tab activated:', tabId);
+        } else {
+          console.error('Tab elements not found:', tabId);
+        }
+      }
+      
+      // Attach direct click handlers
+      ['refinance', 'comparison', 'blended', 'purchase', 'heloc'].forEach(tabId => {
+        const button = document.getElementById(tabId + '-tab');
+        if (button) {
+          button.onclick = function(e) {
+            e.preventDefault();
+            console.log('Direct click handler for:', tabId);
+            forceTabSwitch(tabId);
+          };
+          console.log('Direct handler attached to:', tabId);
+        }
+      });
+    });
+  </script>
 </body>
 </html>

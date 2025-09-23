@@ -8,7 +8,7 @@ let mainWindow;
 function createWindow() {
   // Create the browser window
   mainWindow = new BrowserWindow({
-    width: 1200,
+    width: 1560,
     height: 900,
     minWidth: 800,
     minHeight: 700,
@@ -20,6 +20,9 @@ function createWindow() {
     icon: path.join(__dirname, "assets", "icon.ico"),
     show: false, // Don't show until ready
   });
+
+  // Maximize the window on startup
+  mainWindow.maximize();
 
   // Prevent error dialogs from appearing
   mainWindow.webContents.on("crashed", (event) => {
