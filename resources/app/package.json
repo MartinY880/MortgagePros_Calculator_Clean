@@ -11,7 +11,7 @@
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "build-installer": "electron-builder --win nsis",
-    "package": "electron-packager . \"MortgagePros Calculator\" --platform=win32 --arch=x64 --out=dist-packager --overwrite --icon=assets/icon.ico --prune=true --ignore=\"dist.*|build.*|installer.*|.*\\.ps1|.*\\.zip|.*\\.pfx|.*\\.cer\" --version-string.CompanyName=\"MortgagePros\" --version-string.FileDescription=\"MortgagePros Calculator\" --version-string.ProductName=\"MortgagePros Calculator\"",
+    "package": "electron-packager . \"MortgagePros Calculator\" --platform=win32 --arch=x64 --out=dist-packager --overwrite --icon=assets/icon.ico --prune=true --ignore=\"dist.*|build.*|installer.*|.*\\.ps1|.*\\.zip|.*\\.pfx|.*\\.cer\" --version-string.CompanyName=\"MortgagePros\" --version-string.FileDescription=\"MortgagePros Calculator v12.0.0 Enhanced Edition\" --version-string.ProductName=\"MortgagePros Calculator\" --version-string.ProductVersion=\"12.0.0\" --version-string.FileVersion=\"12.0.0\"",
     "build-exe": "npm run package",
     "build-installer-hybrid": "npm run package && powershell.exe -ExecutionPolicy Bypass -File create-installer.ps1",
     "build-installer-production": "powershell.exe -ExecutionPolicy Bypass -File create-production-installer.ps1",
@@ -29,7 +29,7 @@
   "license": "ISC",
   "devDependencies": {
     "cross-env": "^7.0.3",
-    "electron": "^38.1.0",
+    "electron": "^38.1.2",
     "electron-builder": "^26.0.12",
     "electron-icon-builder": "^2.0.1",
     "electron-packager": "^17.1.2",

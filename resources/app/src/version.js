@@ -6,29 +6,29 @@
  */
 
 // Main application version
-const APP_VERSION = "11.0.0";
+const APP_VERSION = "12.0.0";
 
 // Version metadata
 const VERSION_INFO = {
   version: APP_VERSION,
   name: "MortgagePros Calculator",
-  codename: "Optimized Gold", // Optional: Add codenames for major releases
+  codename: "Enhanced Edition", // Optional: Add codenames for major releases
   releaseDate: "2025-09-23",
   buildType: "Production", // Options: "Production", "Beta", "Alpha", "Development"
 
   // Detailed version components
-  major: 11,
+  major: 12,
   minor: 0,
   patch: 0,
 
   // Release notes for this version
   releaseNotes: [
-    "Fixed tab functionality with emergency fallback system",
-    "Added auto-expanding Payment Summary & Analysis tab",
-    "Cleaned up unnecessary files and dependencies",
-    "Configured maximized window launch",
-    "Optimized performance and removed bloat",
-    "Enhanced error handling throughout application",
+    "Major version 12.0.0 - Enhanced Edition",
+    "Centralized version management system",
+    "Interactive version badge with release notes",
+    "Automated version syncing across all files",
+    "Professional version documentation system",
+    "All previous v11 optimizations and fixes included",
   ],
 };
 
