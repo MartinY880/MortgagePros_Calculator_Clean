@@ -1118,7 +1118,11 @@ header.row {
 }
 
 [data-theme="dark"] .comparison-table th {
-  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)) !important;
+  background: linear-gradient(
+    135deg,
+    var(--primary-color),
+    var(--secondary-color)
+  ) !important;
   color: white !important;
 }
 

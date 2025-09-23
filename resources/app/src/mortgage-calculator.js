@@ -211,43 +211,31 @@ function showResultsWithAnimation() {
 
 // DOM Elements
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("DOM loaded - initializing app quickly...");
-  
-  // Initialize theme first (fast)
+  // Test jsPDF availability immediately
+  console.log("Testing jsPDF availability...");
+  console.log("window.jspdf:", window.jspdf);
+  console.log("typeof window.jspdf:", typeof window.jspdf);
+  if (window.jspdf) {
+    console.log("jsPDF constructor:", window.jspdf.jsPDF);
+    console.log("typeof jsPDF constructor:", typeof window.jspdf.jsPDF);
+  }
+
+  // Initialize theme first
   initializeTheme();
 
-  // Show app immediately
-  document.body.style.visibility = 'visible';
+  // Initialize event listeners once DOM is fully loaded
+  initializeEventListeners();
 
-  // Defer heavy operations to allow UI to show first
-  setTimeout(() => {
-    console.log("Initializing heavy operations...");
-    
-    // Test jsPDF availability
-    console.log("Testing jsPDF availability...");
-    console.log("window.jspdf:", window.jspdf);
-    console.log("typeof window.jspdf:", typeof window.jspdf);
-    if (window.jspdf) {
-      console.log("jsPDF constructor:", window.jspdf.jsPDF);
-      console.log("typeof jsPDF constructor:", typeof window.jspdf.jsPDF);
-    }
+  // Load logo with proper path handling
+  loadLogo();
 
-    // Initialize event listeners
-    initializeEventListeners();
+  // Load cached data from localStorage
+  loadCachedData();
 
-    // Load logo with proper path handling
-    loadLogo();
-
-    // Load cached data from localStorage
-    loadCachedData();
-
-    // Listen for menu commands from the main process
-    ipcRenderer.on("menu-export-schedule", () => {
-      exportToCSV();
-    });
-    
-    console.log("App fully initialized!");
-  }, 10); // Very small delay to allow UI to render first
+  // Listen for menu commands from the main process
+  ipcRenderer.on("menu-export-schedule", () => {
+    exportToCSV();
+  });
 });
 
 function initializeEventListeners() {
