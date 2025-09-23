@@ -1,12 +1,13 @@
 {
   "name": "mortgagepros-calculator",
   "productName": "MortgagePros Calculator",
-  "version": "11.0.0",
+  "version": "12.0.0",
   "description": "Professional mortgage calculator application",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dev": "cross-env NODE_ENV=development electron .",
+    "sync-version": "node sync-version.js",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "build-installer": "electron-builder --win nsis",

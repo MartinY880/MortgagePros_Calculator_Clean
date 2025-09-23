@@ -26,7 +26,7 @@
           <span class="icon">🌙</span>
           <span class="theme-text">Dark</span>
         </button>
-        <div class="badge bg-gradient text-white px-2 py-1" style="background: linear-gradient(135deg, #1e40af, #3b82f6); font-size: 0.7rem;">
+        <div id="versionBadge" class="badge bg-gradient text-white px-2 py-1" style="background: linear-gradient(135deg, #1e40af, #3b82f6); font-size: 0.7rem;" title="Click for version details">
           v11.0.0
         </div>
       </div>
@@ -940,6 +940,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
   <script src="../node_modules/jspdf/dist/jspdf.umd.min.js"></script>
   <script src="../node_modules/papaparse/papaparse.min.js"></script>
+  <!-- Load version configuration -->
+  <script src="version.js"></script>
   <!-- Load main application -->
   <script src="mortgage-calculator.js"></script>
   
@@ -987,6 +989,35 @@
           console.log('Direct handler attached to:', tabId);
         }
       });
+    });
+  </script>
+
+  <!-- Version Management Script -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('Version management script loaded');
+      
+      // Update version badge with current version
+      function updateVersionDisplay() {
+        const versionBadge = document.getElementById('versionBadge');
+        if (versionBadge && window.AppVersion) {
+          const displayVersion = window.AppVersion.VersionUtils.getDisplayVersion();
+          versionBadge.innerHTML = `v${displayVersion}`;
+          
+          // Add click handler for version info
+          versionBadge.onclick = function() {
+            const versionInfo = window.AppVersion.VersionUtils.getFullVersionInfo();
+            const releaseNotes = window.AppVersion.VERSION_INFO.releaseNotes.join('\n• ');
+            
+            alert(`${versionInfo}\n\nWhat's New:\n• ${releaseNotes}`);
+          };
+        }
+      }
+      
+      // Initialize version display
+      updateVersionDisplay();
+      
+      console.log('Version system initialized:', window.AppVersion?.APP_VERSION);
     });
   </script>
 </body>
