@@ -1122,13 +1122,13 @@ function switchTab(tabType, saveCurrentState = true) {
 function loadLogo() {
   const logoElement = document.getElementById("logo");
 
-  // Set the logo source to the local copy in src folder
-  logoElement.src = "./logo.png";
+  // Set the logo source to the correct path in assets folder
+  logoElement.src = "../assets/logo.png";
 
   // Fallback: if logo fails to load, try alternative paths
   logoElement.onerror = function () {
-    console.log("Logo failed to load from ./logo.png, trying alternatives...");
-    const fallbacks = ["./assets/logo.png", "../assets/logo.png"];
+    console.log("Logo failed to load from ../assets/logo.png, trying alternatives...");
+    const fallbacks = ["./assets/logo.png", "./logo.png"];
     let currentFallback = 0;
 
     const tryNextFallback = () => {
@@ -3009,7 +3009,7 @@ function getLogoDataURL() {
     img.onerror = function () {
       resolve(null); // Return null if logo can't be loaded
     };
-    img.src = "./logo.png";
+    img.src = "../assets/logo.png";
   });
 }
 
