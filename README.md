@@ -1,10 +1,6 @@
 # MortgagePros Calculator<div align="center">
 
-
-
 A professional mortgage calculator application built with Electron. Calculate monthly payments, view amortization schedules, and visualize payment breakdowns with interactive charts.# 🏠💰 **MortgagePros Calculator** `v11.0.0` 🏆
-
-
 
 ## 🚀 Features[![� Ready-to-Run](https://img.shields.io/badge/🚀_Ready--to--Run-brightgreen?style=for-the-badge)](.)
 
@@ -12,7 +8,7 @@ A professional mortgage calculator application built with Electron. Calculate mo
 
 - **Loan Calculation**: Calculate monthly mortgage payments based on loan amount, interest rate, and term[![💻 Portable](https://img.shields.io/badge/💻_Portable-orange?style=for-the-badge)](.)
 
-- **Amortization Schedule**: View detailed payment breakdown over the life of the loan  [![🏢 Enterprise](https://img.shields.io/badge/🏢_Enterprise-purple?style=for-the-badge)](.)
+- **Amortization Schedule**: View detailed payment breakdown over the life of the loan [![🏢 Enterprise](https://img.shields.io/badge/🏢_Enterprise-purple?style=for-the-badge)](.)
 
 - **Interactive Charts**: Visualize principal vs interest payments and loan balance over time
 
@@ -62,23 +58,23 @@ A professional mortgage calculator application built with Electron. Calculate mo
 
 - **Start Date**: Beginning date of the loan
 
-• **Purchase Mortgage** - New home buying  
+• **Purchase Mortgage** - New home buying
 
-### Results Display• **Refinance** - Existing mortgage refinancing  
+### Results Display• **Refinance** - Existing mortgage refinancing
 
 - Monthly payment amount• **HELOC** - Home equity line of credit
 
-- Total interest paid over loan term  
+- Total interest paid over loan term
 
 - Total amount paid (principal + interest)### 📊 **Analysis Tools**
 
 - Monthly breakdown of principal vs interest
 
-• Complete amortization schedules  
+• Complete amortization schedules
 
-### Charts & Visualization• Interactive payment charts  
+### Charts & Visualization• Interactive payment charts
 
-- **Principal vs Interest Chart**: Shows how payment composition changes over time• Extra payment modeling  
+- **Principal vs Interest Chart**: Shows how payment composition changes over time• Extra payment modeling
 
 - **Loan Balance Chart**: Displays remaining balance throughout loan term• Total cost breakdowns
 
@@ -88,17 +84,15 @@ A professional mortgage calculator application built with Electron. Calculate mo
 
 ## 🔧 Technical Details<td width="50%">
 
-
-
 **Built with:**### 📄 **Professional Reports**
 
 - Electron Framework
 
-- Chart.js for visualizations• **PDF Export** - Branded mortgage reports  
+- Chart.js for visualizations• **PDF Export** - Branded mortgage reports
 
-- Bootstrap for responsive UI• **CSV Export** - Excel-ready data  
+- Bootstrap for responsive UI• **CSV Export** - Excel-ready data
 
-- HTML5/CSS3/JavaScript• **Full Reports** - Multi-page summaries  
+- HTML5/CSS3/JavaScript• **Full Reports** - Multi-page summaries
 
 • **History** - Save/reload calculations
 
@@ -118,29 +112,23 @@ A professional mortgage calculator application built with Electron. Calculate mo
 
 ## 📝 Version Information</table>
 
+**Version**: 11.0 (Gold Standard) ---
 
-
-**Version**: 11.0 (Gold Standard)  ---
-
-**Last Updated**: September 2025  
+**Last Updated**: September 2025
 
 **Status**: Production Ready ✅## 🎯 **System Requirements** | 🛠️ **Tech Stack** | 📋 **IT Notes**
 
-
-
 ## 🆘 Support<div align="center">
-
-
 
 For questions or support, please refer to the application documentation or contact support.| 💻 **Windows 10/11** | ⚡ **Electron 38.1.0** | 📦 **~200MB Complete** |
 
 | :------------------: | :--------------------: | :--------------------: |
 
----|  ❌ No Installation  |   🎨 Bootstrap 5.3.8   |  ✅ All Dependencies   |
+---| ❌ No Installation | 🎨 Bootstrap 5.3.8 | ✅ All Dependencies |
 
-|  ❌ No Admin Rights  |   📊 Chart.js 4.5.0    |    🔒 Runs Offline     |
+| ❌ No Admin Rights | 📊 Chart.js 4.5.0 | 🔒 Runs Offline |
 
-*Professional mortgage calculation tool for accurate loan analysis and planning.*|    📁 Any Folder     |     📄 jsPDF 3.0.2     |   🚀 Ready-to-Deploy   |
+_Professional mortgage calculation tool for accurate loan analysis and planning._| 📁 Any Folder | 📄 jsPDF 3.0.2 | 🚀 Ready-to-Deploy |
 
 </div>
 
@@ -192,7 +180,7 @@ This is a pre-built portable application. To modify or rebuild:
 
 1. **Extract source code** from `resources/app/` directory
 2. **Install Node.js** and npm dependencies
-3. **Use Electron Packager** or Electron Builder to create new executable
+3. **Use Electron Builder** to create new executable
 4. **Test thoroughly** - Especially PDF generation and cross-platform compatibility
 
 ### Key Dependencies

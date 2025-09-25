@@ -11,12 +11,6 @@
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "build-installer": "electron-builder --win nsis",
-    "package": "electron-packager . \"MortgagePros Calculator\" --platform=win32 --arch=x64 --out=dist-packager --overwrite --icon=assets/icon.ico --prune=true --ignore=\"dist.*|build.*|installer.*|.*\\.ps1|.*\\.zip|.*\\.pfx|.*\\.cer\" --version-string.CompanyName=\"MortgagePros\" --version-string.FileDescription=\"MortgagePros Calculator v12.0.0 Enhanced Edition\" --version-string.ProductName=\"MortgagePros Calculator\" --version-string.ProductVersion=\"12.0.0\" --version-string.FileVersion=\"12.0.0\"",
-    "build-exe": "npm run package",
-    "build-installer-hybrid": "npm run package && powershell.exe -ExecutionPolicy Bypass -File create-installer.ps1",
-    "build-installer-production": "powershell.exe -ExecutionPolicy Bypass -File create-production-installer.ps1",
-    "build-installer-minimal": "powershell.exe -ExecutionPolicy Bypass -File create-minimal-installer.ps1",
-    "build-intune": "powershell.exe -ExecutionPolicy Bypass -File build-intune-v10.ps1",
     "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [
@@ -32,8 +26,8 @@
     "electron": "^38.1.2",
     "electron-builder": "^26.0.12",
     "electron-icon-builder": "^2.0.1",
-    "electron-packager": "^17.1.2",
-    "png-to-ico": "^3.0.1"
+    "png-to-ico": "^3.0.1",
+    "typescript": "^5.9.2"
   },
   "dependencies": {
     "bootstrap": "^5.3.8",
@@ -90,7 +84,7 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico",
+      "icon": "icon.ico",
       "signAndEditExecutable": false,
       "verifyUpdateCodeSignature": false,
       "requestedExecutionLevel": "asInvoker",
@@ -110,11 +104,10 @@
       "runAfterFinish": false,
       "artifactName": "${productName} Setup ${version}.exe",
       "differentialPackage": false,
-      "installerIcon": "assets/icon.ico",
-      "uninstallerIcon": "assets/icon.ico",
-      "installerHeader": "assets/icon.ico",
-      "installerSidebar": "assets/icon.ico",
-      "include": "installer.nsh",
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico",
+      "installerHeader": "icon.ico",
+      "installerSidebar": "icon.ico",
       "warningsAsErrors": false,
       "displayLanguageSelector": false,
       "language": "1033"

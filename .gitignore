@@ -1,6 +1,6 @@
 # Build and distribution files
 dist/
-dist-packager/
+dist-installer/
 build/
 out/
 installer/

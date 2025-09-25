@@ -1,8 +1,0 @@
-[FILENAMES] 
-Exe=MortgagePros Calculator.exe 
-SaveAs=MortgagePros Calculator_updated.exe 
-Log=rh_log.txt 
- 
-[COMMANDS] 
--delete VERSIONINFO,1, 
--addoverwrite version_12_5_0.res, VERSIONINFO,1, 
