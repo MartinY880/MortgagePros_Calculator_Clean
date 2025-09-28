@@ -6,7 +6,7 @@
  */
 
 // Main application version
-const APP_VERSION = "12.0.0";
+const APP_VERSION = "12.5.0";
 
 // Version metadata
 const VERSION_INFO = {
@@ -23,12 +23,12 @@ const VERSION_INFO = {
 
   // Release notes for this version
   releaseNotes: [
-    "Major version 12.0.0 - Enhanced Edition",
+    "Major version 12.5.0 - Enhanced Edition",
     "Centralized version management system",
     "Interactive version badge with release notes",
     "Automated version syncing across all files",
     "Professional version documentation system",
-    "All previous v11 optimizations and fixes included",
+    "All previous v12.5.0 optimizations and fixes included",
   ],
 };
 
@@ -36,13 +36,13 @@ const VERSION_INFO = {
 const VersionUtils = {
   /**
    * Get the full version string
-   * @returns {string} Version string (e.g., "11.0.0")
+   * @returns {string} Version string (e.g., "12.5.0")
    */
   getVersion: () => APP_VERSION,
 
   /**
    * Get version with build type if not production
-   * @returns {string} Version with build type (e.g., "11.0.0-beta")
+   * @returns {string} Version with build type (e.g., "12.5.0-beta")
    */
   getDisplayVersion: () => {
     return VERSION_INFO.buildType === "Production"
