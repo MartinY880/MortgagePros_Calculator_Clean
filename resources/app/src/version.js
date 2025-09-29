@@ -6,29 +6,29 @@
  */
 
 // Main application version
-const APP_VERSION = "12.5.0";
+const APP_VERSION = "12.6.0";
 
 // Version metadata
 const VERSION_INFO = {
   version: APP_VERSION,
   name: "MortgagePros Calculator",
-  codename: "Enhanced Edition", // Optional: Add codenames for major releases
-  releaseDate: "2025-09-23",
+  codename: "Updated Edition", // Optional: Add codenames for major releases
+  releaseDate: "2025-09-29",
   buildType: "Production", // Options: "Production", "Beta", "Alpha", "Development"
 
   // Detailed version components
   major: 12,
-  minor: 0,
+  minor: 6,
   patch: 0,
 
   // Release notes for this version
   releaseNotes: [
-    "Major version 12.5.0 - Enhanced Edition",
-    "Centralized version management system",
-    "Interactive version badge with release notes",
-    "Automated version syncing across all files",
-    "Professional version documentation system",
-    "All previous v12.5.0 optimizations and fixes included",
+    "Version 12.6.0 - Updated Edition",
+    "Updated Property Tax input to monthly dollar amounts",
+    "Fixed Home Insurance calculation to use monthly amounts correctly",
+    "Improved input field consistency across all tabs",
+    "Enhanced calculation accuracy for monthly payments",
+    "Updated validation logic for dollar-based inputs",
   ],
 };
 
@@ -36,13 +36,13 @@ const VERSION_INFO = {
 const VersionUtils = {
   /**
    * Get the full version string
-   * @returns {string} Version string (e.g., "12.5.0")
+   * @returns {string} Version string (e.g., "12.6.0")
    */
   getVersion: () => APP_VERSION,
 
   /**
    * Get version with build type if not production
-   * @returns {string} Version with build type (e.g., "12.5.0-beta")
+   * @returns {string} Version with build type (e.g., "12.6.0-beta")
    */
   getDisplayVersion: () => {
     return VERSION_INFO.buildType === "Production"

@@ -1,6 +1,6 @@
 # MortgagePros Calculator<div align="center">
 
-A professional mortgage calculator application built with Electron. Calculate monthly payments, view amortization schedules, and visualize payment breakdowns with interactive charts.# 🏠💰 **MortgagePros Calculator** `v11.0.0` 🏆
+A professional mortgage calculator application built with Electron. Calculate monthly payments, view amortization schedules, and visualize payment breakdowns with interactive charts.# 🏠💰 **MortgagePros Calculator** `v12.6.0` 🏆
 
 ## 🚀 Features[![� Ready-to-Run](https://img.shields.io/badge/🚀_Ready--to--Run-brightgreen?style=for-the-badge)](.)
 
@@ -112,7 +112,7 @@ A professional mortgage calculator application built with Electron. Calculate mo
 
 ## 📝 Version Information</table>
 
-**Version**: 11.0 (Gold Standard) ---
+**Version**: 12.6.0 (Updated Edition) ---
 
 **Last Updated**: September 2025
 
@@ -158,13 +158,13 @@ powershell -Command "New-Object -ComObject WScript.Shell | ForEach-Object { $_.C
 | 🏢 Corporate firewall      | App runs fully offline                       |
 | 🐌 Slow first launch       | Normal - Electron takes 10-15s initially     |
 
-## 🏆 Version 11.0.0 - Gold Standard Release
+## 🏆 Version 12.6.0 - Updated Edition
 
 <div align="center">
 
-**🎯 Perfect Balance of Functionality, Performance & Professional Appeal**
+**🎯 Enhanced Input System with Improved Calculation Accuracy**
 
-✅ Bootstrap UI Fixed • ✅ PDF Generation Restored • ✅ Enterprise Ready • ✅ Fully Portable
+✅ Property Tax as Monthly $ • ✅ Home Insurance Fixed • ✅ Consistent Inputs • ✅ Better UX
 
 </div>
 

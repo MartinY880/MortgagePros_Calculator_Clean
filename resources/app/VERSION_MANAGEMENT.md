@@ -65,10 +65,10 @@ When you change the version in `src/version.js`, the following will be automatic
 
 Set the `buildType` in `version.js`:
 
-- **"Production"**: Final release version (displays as "11.0.0")
-- **"Beta"**: Beta testing version (displays as "11.0.0-beta")
-- **"Alpha"**: Alpha testing version (displays as "11.0.0-alpha")
-- **"Development"**: Development version (displays as "11.0.0-development")
+- **"Production"**: Final release version (displays as "12.6.0")
+- **"Beta"**: Beta testing version (displays as "12.6.0-beta")
+- **"Alpha"**: Alpha testing version (displays as "12.6.0-alpha")
+- **"Development"**: Development version (displays as "12.6.0-development")
 
 ## 📝 Best Practices
 
@@ -84,8 +84,8 @@ Set the `buildType` in `version.js`:
 
 4. **Git Tagging**: Consider creating git tags for releases:
    ```bash
-   git tag -a v11.0.0 -m "Release version 11.0.0"
-   git push origin v11.0.0
+   git tag -a v12.6.0 -m "Release version 12.6.0"
+   git push origin v12.6.0
    ```
 
 ## 🛠️ Files in the Version System

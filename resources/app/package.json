@@ -1,7 +1,7 @@
 {
   "name": "mortgagepros-calculator",
   "productName": "MortgagePros Calculator",
-  "version": "12.0.0",
+  "version": "12.6.0",
   "description": "Professional mortgage calculator application",
   "main": "main.js",
   "scripts": {

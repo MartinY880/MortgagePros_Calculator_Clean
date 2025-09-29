@@ -259,9 +259,9 @@ class InputValidator {
         loanErrors.push(`${loanName}: Property tax cannot be negative`);
       }
 
-      if (propertyTax > 10) {
+      if (propertyTax > 5000) {
         loanErrors.push(
-          `${loanName}: Property tax rate seems unusually high (over 10%)`
+          `${loanName}: Property tax amount seems unusually high (over $5,000/month)`
         );
       }
 
@@ -502,8 +502,8 @@ class InputValidator {
     }
 
     // Property tax warnings
-    if (propertyTax > 5) {
-      warnings.push("Property tax rate exceeds 5% - this is quite high");
+    if (propertyTax > 2000) {
+      warnings.push("Property tax exceeds $2,000/month - this is quite high");
     }
 
     // Home insurance warnings

@@ -1127,7 +1127,9 @@ function loadLogo() {
 
   // Fallback: if logo fails to load, try alternative paths
   logoElement.onerror = function () {
-    console.log("Logo failed to load from ../assets/logo.png, trying alternatives...");
+    console.log(
+      "Logo failed to load from ../assets/logo.png, trying alternatives..."
+    );
     const fallbacks = ["./assets/logo.png", "./logo.png"];
     let currentFallback = 0;
 
@@ -1250,8 +1252,8 @@ function calculateMortgage(formType = "purchase") {
   }
 
   // Calculate monthly property tax and insurance
-  const monthlyPropertyTax = (propertyValue * propertyTax) / 100 / 12;
-  const monthlyHomeInsurance = homeInsurance / 12;
+  const monthlyPropertyTax = propertyTax; // Property tax is now entered as monthly dollar amount
+  const monthlyHomeInsurance = homeInsurance; // Home insurance is entered as monthly dollar amount
 
   // Calculate total monthly payment (including extra payment)
   const totalMonthlyPayment =
@@ -1611,9 +1613,8 @@ function calculateSingleLoan(loanData) {
     (amount * (monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments))) /
     (Math.pow(1 + monthlyRate, numberOfPayments) - 1);
 
-  // Calculate monthly property tax (percentage of appraised value)
-  const monthlyPropertyTax =
-    appraisedValue > 0 ? (appraisedValue * (propertyTax / 100)) / 12 : 0;
+  // Calculate monthly property tax (now entered as monthly dollar amount)
+  const monthlyPropertyTax = propertyTax;
 
   // Total monthly payment including PMI, property tax, and home insurance
   const totalMonthlyPayment =
@@ -3505,11 +3506,7 @@ async function exportFullReport() {
           document.getElementById("refinancePmiToggle").checked;
 
         // Calculate monthly values
-        propertyTaxValue = `$${(
-          (appraisedValue * refinancePropertyTax) /
-          100 /
-          12
-        ).toLocaleString()}`;
+        propertyTaxValue = `$${refinancePropertyTax.toLocaleString()}`;
         homeInsuranceValue = `$${refinanceHomeInsurance.toLocaleString()}`;
 
         // PMI calculation based on toggle (monthly vs annual)
@@ -3546,11 +3543,7 @@ async function exportFullReport() {
         );
 
         // Calculate monthly values
-        propertyTaxValue = `$${(
-          (propertyValue * propertyTaxRate) /
-          100 /
-          12
-        ).toLocaleString()}`;
+        propertyTaxValue = `$${propertyTaxRate.toLocaleString()}`;
         homeInsuranceValue = `$${homeInsurance.toLocaleString()}`;
         pmiValue = `$${((loanAmount * pmiRate) / 100 / 12).toLocaleString()}`;
         hoaValue = `$${hoaMonthly.toLocaleString()}`;
