@@ -12,17 +12,16 @@
 </head>
 <body>
   <div class="container-fluid p-3 main-container">
-    <!-- Header with Logo and Title - No Bottom Margin -->
-    <header class="row mb-0 align-items-center fade-in-up">
-      <div class="col-md-3" style="padding-top: 0; padding-bottom: 0;">
-        <img id="logo" alt="MortgagePros Logo" class="logo" style="max-height: 120px; width: auto; padding: 0; margin-top: 0; margin-bottom: 0;">
+    <div class="row align-items-center mb-2">
+      <div class="col-md-3 col-6">
+        <img id="logo" alt="MortgagePros Logo" class="logo" style="max-height: 120px; width: auto; padding: 0; margin-top: 0; margin-bottom: 0;" />
       </div>
       <div class="col-md-7 text-center" style="padding-top: 0; padding-bottom: 0;">
         <h1 class="title-text mb-0" style="margin-bottom: 0 !important;">MortgagePros Calculator</h1>
         <p class="subtitle-text mb-0" style="margin-top: 8px !important; margin-bottom: 0 !important;">Professional • Accurate • Fast</p>
       </div>
       <div class="col-md-2 text-end d-flex flex-column align-items-end gap-2">
-        <button id="themeToggle" class="theme-toggle" type="button" title="Toggle Dark Mode">
+        <button type="button" id="themeToggle" class="theme-toggle" title="Switch to Dark Mode" aria-label="Toggle theme">
           <span class="icon">🌙</span>
           <span class="theme-text">Dark</span>
         </button>
@@ -30,7 +29,7 @@
           v12.6.0
         </div>
       </div>
-    </header>
+    </div>
 
     <!-- Custom Notification Area -->
     <div id="notificationArea" class="row mb-3" style="display: none;">
@@ -128,15 +127,26 @@
                       </div>
                       <input type="text" inputmode="decimal" id="refinancePmiAmount" class="form-control" value="0" placeholder="e.g., 125">
                     </div>
+                    <div class="form-group mt-2">
+                      <label for="refinancePmiEndRule">PMI Ends at:</label>
+                      <select id="refinancePmiEndRule" class="form-select">
+                        <option value="80" selected>80% LTV</option>
+                        <option value="78">78% LTV</option>
+                      </select>
+                    </div>
                   </div>
                   <div class="col-md-6">
                     <div class="form-group">
                       <label for="refinancePropertyTax">Property Tax (Monthly $):</label>
                       <input type="text" inputmode="numeric" id="refinancePropertyTax" class="form-control" value="0">
                     </div>
+                    <div class="form-group mt-2">
+                      <label for="refinanceCashOut">Cash-Out Amount ($):</label>
+                      <input type="text" inputmode="decimal" id="refinanceCashOut" class="form-control" value="0" placeholder="e.g., 10000">
+                      <small class="text-muted">Optional: additional cash taken out, added to loan principal.</small>
+                    </div>
                   </div>
                 </div>
-
                 <div class="row mb-3">
                   <div class="col-md-6">
                     <div class="form-group">
@@ -148,6 +158,40 @@
                     <div class="form-group">
                       <label for="refinanceExtraPayment">Extra Monthly Payment ($):</label>
                       <input type="text" inputmode="numeric" id="refinanceExtraPayment" class="form-control" value="0">
+                    </div>
+                  </div>
+                </div>
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                  </div>
+                </div>
+
+                <!-- Closing Costs & Points -->
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label for="refinanceClosingCosts">Closing Costs ($):</label>
+                      <input type="text" inputmode="decimal" id="refinanceClosingCosts" class="form-control" value="0" placeholder="e.g., 3500">
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="form-group">
+                      <label for="refinancePoints">Points (% of loan amount):</label>
+                      <input type="text" inputmode="decimal" id="refinancePoints" class="form-control" value="0" placeholder="e.g., 1">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row mb-3">
+                  <div class="col-md-8">
+                    <label class="form-label d-block mb-2">Closing Costs Handling</label>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" name="refinanceCostHandling" id="refiCosts_due" value="due" checked>
+                      <label class="form-check-label" for="refiCosts_due">Due at Closing</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" name="refinanceCostHandling" id="refiCosts_finance" value="finance">
+                      <label class="form-check-label" for="refiCosts_finance">Include in Loan Amount</label>
                     </div>
                   </div>
                 </div>
@@ -565,6 +609,13 @@
                   <label for="pmiRate">PMI Rate (%):</label>
                   <input type="text" inputmode="decimal" id="pmiRate" class="form-control" value="0">
                 </div>
+                <div class="form-group mt-2">
+                  <label for="pmiEndRule">PMI Ends at:</label>
+                  <select id="pmiEndRule" class="form-select">
+                    <option value="80" selected>80% LTV</option>
+                    <option value="78">78% LTV</option>
+                  </select>
+                </div>
               </div>
               <div class="col-md-6">
                 <div class="form-group">
@@ -674,6 +725,22 @@
                 </div>
               </div>
               <div class="row">
+                <div class="col-12">
+                  <div class="result-item">
+                    <h6>Base Monthly Payment (no extra)</h6>
+                    <p id="baseMonthlyPayment" class="result-value">$0</p>
+                  </div>
+                </div>
+              </div>
+              <div class="row" id="refiCostsInfoRow" style="display: none;">
+                <div class="col-12">
+                  <div class="result-item">
+                    <h6>Closing Costs & Points</h6>
+                    <p id="refiCostsInfo" class="result-value">—</p>
+                  </div>
+                </div>
+              </div>
+              <div class="row">
                 <div class="col-6">
                   <div class="result-item">
                     <h6>Total Interest</h6>
@@ -702,13 +769,7 @@
                 </div>
               </div>
               <div class="row">
-                <div class="col-6">
-                  <div class="result-item">
-                    <h6>PMI</h6>
-                    <p id="pmiAmount" class="result-value">$0</p>
-                  </div>
-                </div>
-                <div class="col-6" id="hoaSummarySection">
+                <div class="col-12" id="hoaSummarySection">
                   <div class="result-item">
                     <h6>HOA/Other</h6>
                     <p id="hoaAmount" class="result-value">$0</p>
@@ -718,11 +779,19 @@
               <div class="row">
                 <div class="col-6">
                   <div class="result-item">
+                    <h6>PMI</h6>
+                    <p id="pmiAmount" class="result-value">$0</p>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="result-item">
                     <h6>Extra Payment</h6>
                     <p id="extraAmount" class="result-value">$0</p>
                   </div>
                 </div>
-                <div class="col-6">
+              </div>
+              <div class="row">
+                <div class="col-12">
                   <div class="result-item">
                     <h6>Total Cost</h6>
                     <p id="totalCost" class="result-value">$0</p>
@@ -857,6 +926,7 @@
                   <p><strong>Principal & Interest:</strong> <span id="summaryPI">$0.00</span></p>
                   <p><strong>Taxes & Insurance:</strong> <span id="summaryTI">$0.00</span></p>
                   <p><strong>PMI:</strong> <span id="summaryPMI">$0.00</span></p>
+                  <p id="summaryPMIDropRow" style="display: none;"><strong>PMI Ends:</strong> <span id="summaryPMIDrop">—</span></p>
                 </div>
                 <div class="col-md-6">
                   <p id="summaryHOASection"><strong>HOA/Other:</strong> <span id="summaryHOA">$0.00</span></p>
@@ -901,6 +971,7 @@
                       <th>Principal</th>
                       <th>Extra Payment</th>
                       <th>Interest</th>
+                      <th>PMI</th>
                       <th>Balance</th>
                     </tr>
                   </thead>

@@ -333,6 +333,54 @@ class ReportExporter {
       doc.text(value, 120, yPos);
       yPos += 8;
     });
+
+    // Add Closing Costs & Points details for Refinance (if provided)
+    if (data.refinanceCosts) {
+      const rc = data.refinanceCosts;
+      const currency = (v) => window.NumberFormatter.formatCurrency(v || 0);
+      const pointsPct = (rc.pointsPercent || 0).toFixed(2) + "%";
+      const pointsAmt = currency(rc.pointsAmount || 0);
+      const closingAmt = currency(rc.closingCosts || 0);
+      const modeText = rc.financeCosts ? "Included in Loan" : "Due at Closing";
+      const modeAmount = rc.financeCosts
+        ? rc.financedCosts || 0
+        : rc.dueAtClosing || 0;
+
+      yPos += 10;
+      doc.setFont("helvetica", "bold");
+      doc.text("Closing Costs, Points & Cash-Out", 15, yPos);
+      yPos += 10;
+      doc.setFont("helvetica", "normal");
+
+      const lines = [
+        ["Handling:", modeText],
+        ["Closing Costs:", closingAmt],
+        ["Points:", `${pointsPct} = ${pointsAmt}`],
+        ["Cash-Out Amount:", currency(rc.cashOutAmount || 0)],
+        [
+          rc.financeCosts ? "Amount Added to Loan:" : "Amount Due at Closing:",
+          currency(modeAmount),
+        ],
+      ];
+
+      lines.forEach(([label, value]) => {
+        doc.text(label, 20, yPos);
+        doc.text(value, 120, yPos);
+        yPos += 8;
+      });
+
+      if (
+        typeof rc.baseLoanAmount !== "undefined" &&
+        typeof rc.adjustedLoanAmount !== "undefined"
+      ) {
+        doc.text("Base Loan Amount:", 20, yPos);
+        doc.text(currency(rc.baseLoanAmount), 120, yPos);
+        yPos += 8;
+        doc.text("Adjusted Loan Amount:", 20, yPos);
+        doc.text(currency(rc.adjustedLoanAmount), 120, yPos);
+        yPos += 8;
+      }
+    }
   }
 
   /**

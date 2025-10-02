@@ -168,6 +168,22 @@ body {
   margin-bottom: var(--spacing-md);
 }
 
+/* Standardize field spacing within calculator forms */
+#refinanceForm .form-group,
+#purchaseForm .form-group,
+#helocForm .form-group {
+  margin-bottom: var(--spacing-sm) !important;
+}
+
+/* Consistent helper text spacing in calculator forms */
+#refinanceForm small.text-muted,
+#purchaseForm small.text-muted,
+#helocForm small.text-muted {
+  display: block;
+  margin-top: var(--spacing-xs);
+  margin-bottom: 0;
+}
+
 .form-label,
 label {
   font-weight: var(--font-weight-semibold);

@@ -343,6 +343,8 @@ function initializeEventListeners() {
     );
   }
 
+  // No auto-recalculation: users trigger calculations via Calculate buttons only
+
   // Add/Remove Option B buttons
   const addOption2Btn = document.getElementById("addOption2Btn");
   if (addOption2Btn) {
@@ -567,6 +569,7 @@ function initializePaymentSummaryWithZeros() {
   // Initialize main payment summary with zeros
   const paymentSummaryElements = {
     monthlyPayment: "$0.00",
+    baseMonthlyPayment: "$0.00",
     loanAmount: "$0.00",
     totalInterest: "$0.00",
     principalInterest: "$0.00",
@@ -584,6 +587,14 @@ function initializePaymentSummaryWithZeros() {
       element.textContent = paymentSummaryElements[elementId];
     }
   });
+
+  // Hide Base Monthly Payment row by default until extra payment is entered
+  const baseMonthlyPaymentContainer = document
+    .getElementById("baseMonthlyPayment")
+    ?.closest(".result-item");
+  if (baseMonthlyPaymentContainer) {
+    baseMonthlyPaymentContainer.style.display = "none";
+  }
 
   // Initialize summary tab with zeros
   const summaryElements = {
@@ -1162,46 +1173,98 @@ function calculateMortgage(formType = "purchase") {
     hoa,
     pmiRate;
 
+  // Refinance uses a dollar-based PMI amount; keep separate from purchase percent-based pmiRate
+  let pmiAmountRefi = 0;
+
+  // Refinance-only: closing costs & points
+  let closingCosts = 0;
+  let pointsPercent = 0;
+  let financeCosts = false;
+  let pointsAmount = 0;
+  let financedCosts = 0;
+  let adjustedLoanAmount = 0;
+  let dueAtClosing = 0;
+  // Refinance-only: optional cash-out
+  let cashOutAmount = 0;
+
   let extraPayment = 0;
 
   if (formType === "refinance") {
     // Get values from refinance form
-    propertyValue = parseFloat(document.getElementById("appraisedValue").value);
-    loanAmount = parseFloat(
-      document.getElementById("refinanceLoanAmount").value
-    );
-    loanTerm = parseInt(document.getElementById("refinanceLoanTerm").value);
-    interestRate = parseFloat(
-      document.getElementById("refinanceInterestRate").value
-    );
-    propertyTax = parseFloat(
-      document.getElementById("refinancePropertyTax").value
-    );
-    homeInsurance = parseFloat(
-      document.getElementById("refinanceHomeInsurance").value
-    );
+    propertyValue =
+      parseFloat(document.getElementById("appraisedValue").value) || 0;
+    loanAmount =
+      parseFloat(document.getElementById("refinanceLoanAmount").value) || 0;
+    loanTerm =
+      parseInt(document.getElementById("refinanceLoanTerm").value, 10) || 0;
+    interestRate =
+      parseFloat(document.getElementById("refinanceInterestRate").value) || 0;
+    propertyTax =
+      parseFloat(document.getElementById("refinancePropertyTax").value) || 0;
+    homeInsurance =
+      parseFloat(document.getElementById("refinanceHomeInsurance").value) || 0;
     hoa = 0; // Not included in refinance form
-    pmiRate = parseFloat(document.getElementById("refinancePmiAmount").value);
+    pmiAmountRefi =
+      parseFloat(document.getElementById("refinancePmiAmount").value) || 0;
     extraPayment =
       parseFloat(document.getElementById("refinanceExtraPayment").value) || 0;
+    if (extraPayment < 0) {
+      showErrorMessage("Extra Monthly Payment must be a number ≥ 0.");
+      return;
+    }
+
+    // Closing costs & points
+    closingCosts =
+      parseFloat(document.getElementById("refinanceClosingCosts")?.value) || 0;
+    pointsPercent =
+      parseFloat(document.getElementById("refinancePoints")?.value) || 0;
+    // Cash-out amount (added to principal; not a cost)
+    cashOutAmount =
+      parseFloat(document.getElementById("refinanceCashOut")?.value) || 0;
+    // Read radio selection: 'due' (default) or 'finance'
+    const costHandlingDue = document.getElementById("refiCosts_due");
+    const costHandlingFinance = document.getElementById("refiCosts_finance");
+    financeCosts = costHandlingFinance && costHandlingFinance.checked;
+    if (closingCosts < 0 || pointsPercent < 0 || cashOutAmount < 0) {
+      showErrorMessage(
+        "Closing Costs, Points, and Cash-Out must be numbers ≥ 0."
+      );
+      return;
+    }
+    // Soft cap points at 5% with a warning behavior (clip)
+    if (pointsPercent > 5) {
+      pointsPercent = 5;
+    }
+    pointsAmount = (pointsPercent / 100) * loanAmount;
+    financedCosts = closingCosts + pointsAmount; // cash-out is not a cost
+    // Cash-out is always added to the loan principal; costs optionally financed
+    adjustedLoanAmount =
+      loanAmount + cashOutAmount + (financeCosts ? financedCosts : 0);
+    dueAtClosing = financeCosts ? 0 : financedCosts;
 
     // For refinance, there's no down payment - loan amount is specified directly
     var downPaymentAmount = 0;
   } else {
     // Get values from purchase form
-    propertyValue = parseFloat(document.getElementById("propertyValue").value);
-    var downPaymentAmount = parseFloat(
-      document.getElementById("downPaymentAmount").value
-    );
+    propertyValue =
+      parseFloat(document.getElementById("propertyValue").value) || 0;
+    var downPaymentAmount =
+      parseFloat(document.getElementById("downPaymentAmount").value) || 0;
     loanAmount = propertyValue - downPaymentAmount;
-    loanTerm = parseInt(document.getElementById("loanTerm").value);
-    interestRate = parseFloat(document.getElementById("interestRate").value);
-    propertyTax = parseFloat(document.getElementById("propertyTax").value);
-    homeInsurance = parseFloat(document.getElementById("homeInsurance").value);
-    hoa = parseFloat(document.getElementById("hoa").value);
-    pmiRate = parseFloat(document.getElementById("pmiRate").value);
+    loanTerm = parseInt(document.getElementById("loanTerm").value, 10) || 0;
+    interestRate =
+      parseFloat(document.getElementById("interestRate").value) || 0;
+    propertyTax = parseFloat(document.getElementById("propertyTax").value) || 0;
+    homeInsurance =
+      parseFloat(document.getElementById("homeInsurance").value) || 0;
+    hoa = parseFloat(document.getElementById("hoa").value) || 0;
+    pmiRate = parseFloat(document.getElementById("pmiRate").value) || 0;
     extraPayment =
       parseFloat(document.getElementById("extraPayment").value) || 0;
+    if (extraPayment < 0) {
+      showErrorMessage("Extra Monthly Payment must be a number ≥ 0.");
+      return;
+    }
   }
 
   // Validate inputs
@@ -1212,7 +1275,17 @@ function calculateMortgage(formType = "purchase") {
       return;
     }
   } else {
-    if (!validateInputs(propertyValue, loanAmount, loanTerm, interestRate)) {
+    if (
+      !validateRefinanceInputs(
+        propertyValue, // appraised value
+        loanAmount,
+        loanTerm,
+        interestRate,
+        propertyTax,
+        homeInsurance,
+        pmiAmountRefi
+      )
+    ) {
       return;
     }
   }
@@ -1223,21 +1296,47 @@ function calculateMortgage(formType = "purchase") {
   // Calculate number of payments
   const numberOfPayments = loanTerm * 12;
 
-  // Calculate monthly principal and interest payment
-  const monthlyPI =
-    (loanAmount *
-      (monthlyInterestRate *
-        Math.pow(1 + monthlyInterestRate, numberOfPayments))) /
-    (Math.pow(1 + monthlyInterestRate, numberOfPayments) - 1);
+  // Calculate monthly principal and interest payment (handle zero-interest gracefully)
+  let monthlyPI;
+  if (monthlyInterestRate === 0) {
+    monthlyPI =
+      numberOfPayments > 0
+        ? (formType === "refinance" ? adjustedLoanAmount : loanAmount) /
+          numberOfPayments
+        : 0;
+  } else {
+    const principalBase =
+      formType === "refinance" ? adjustedLoanAmount : loanAmount;
+    monthlyPI =
+      (principalBase *
+        (monthlyInterestRate *
+          Math.pow(1 + monthlyInterestRate, numberOfPayments))) /
+      (Math.pow(1 + monthlyInterestRate, numberOfPayments) - 1);
+  }
 
-  // Calculate PMI (if down payment < 20% for purchase, or if specified for refinance)
-  const loanToValueRatio = (loanAmount / propertyValue) * 100;
+  // Determine PMI termination rule (LTV threshold)
+  let pmiEndThresholdLtv = 80; // default
+  try {
+    if (formType === "refinance") {
+      const sel = document.getElementById("refinancePmiEndRule");
+      if (sel) pmiEndThresholdLtv = parseFloat(sel.value) || 80;
+    } else if (formType === "purchase") {
+      const sel = document.getElementById("pmiEndRule");
+      if (sel) pmiEndThresholdLtv = parseFloat(sel.value) || 80;
+    }
+  } catch (e) {
+    pmiEndThresholdLtv = 80;
+  }
+
+  // Calculate PMI (if down payment < threshold for purchase, or if specified for refinance)
+  const ltvBase = formType === "refinance" ? adjustedLoanAmount : loanAmount;
+  const loanToValueRatio = (ltvBase / propertyValue) * 100;
   let monthlyPMI;
 
   if (formType === "refinance") {
     // For refinance, check if PMI is in annual or monthly mode
     const pmiToggle = document.getElementById("refinancePmiToggle");
-    const pmiAmount = pmiRate || 0;
+    const pmiAmount = pmiAmountRefi || 0;
 
     if (pmiToggle && pmiToggle.checked) {
       // Annual mode - convert to monthly
@@ -1247,16 +1346,20 @@ function calculateMortgage(formType = "purchase") {
       monthlyPMI = pmiAmount;
     }
   } else {
-    // For purchase, PMI is calculated as a rate if LTV > 80%
-    monthlyPMI = loanToValueRatio > 80 ? (pmiRate / 100 / 12) * loanAmount : 0;
+    // For purchase, PMI is calculated as a rate if LTV > threshold
+    monthlyPMI =
+      loanToValueRatio > pmiEndThresholdLtv
+        ? (pmiRate / 100 / 12) * loanAmount
+        : 0;
   }
 
   // Calculate monthly property tax and insurance
   const monthlyPropertyTax = propertyTax; // Property tax is now entered as monthly dollar amount
   const monthlyHomeInsurance = homeInsurance; // Home insurance is entered as monthly dollar amount
 
-  // Calculate total monthly payment (including extra payment)
-  const totalMonthlyPayment =
+  // Calculate a preliminary total monthly payment (including extra payment)
+  // Note: We'll align this with the amortization schedule (month 1) after generating it
+  let totalMonthlyPayment =
     monthlyPI +
     monthlyPMI +
     monthlyPropertyTax +
@@ -1264,17 +1367,29 @@ function calculateMortgage(formType = "purchase") {
     hoa +
     extraPayment;
 
+  // Base monthly payment without extra
+  const baseMonthlyPayment =
+    monthlyPI + monthlyPMI + monthlyPropertyTax + monthlyHomeInsurance + hoa;
+
   // Generate amortization schedule first to get accurate totals
   const currentAmortizationData = generateAmortizationSchedule(
-    loanAmount,
+    formType === "refinance" ? adjustedLoanAmount : loanAmount,
     monthlyInterestRate,
     numberOfPayments,
     monthlyPropertyTax,
     monthlyHomeInsurance,
     monthlyPMI,
     hoa,
-    extraPayment
+    extraPayment,
+    propertyValue,
+    formType === "refinance",
+    pmiEndThresholdLtv
   );
+
+  // Align displayed monthly payment with schedule (reflects PMI gating and extra payment capping)
+  if (currentAmortizationData && currentAmortizationData.length > 0) {
+    totalMonthlyPayment = currentAmortizationData[0].payment;
+  }
 
   // Calculate actual total interest and cost from schedule
   const totalInterest = currentAmortizationData.reduce(
@@ -1290,7 +1405,7 @@ function calculateMortgage(formType = "purchase") {
   const tabData = formType === "purchase" ? purchaseData : refinanceData;
   tabData.amortizationData = currentAmortizationData;
   tabData.calculationResults = [
-    loanAmount,
+    formType === "refinance" ? adjustedLoanAmount || loanAmount : loanAmount,
     monthlyPI,
     monthlyPropertyTax,
     monthlyHomeInsurance,
@@ -1304,6 +1419,20 @@ function calculateMortgage(formType = "purchase") {
     extraPayment,
     currentAmortizationData,
   ];
+  // Store refi costs metadata for UI/exports
+  if (formType === "refinance") {
+    tabData.refinanceCosts = {
+      closingCosts,
+      pointsPercent,
+      pointsAmount,
+      financedCosts,
+      financeCosts,
+      dueAtClosing,
+      baseLoanAmount: loanAmount,
+      adjustedLoanAmount,
+      cashOutAmount,
+    };
+  }
   tabData.isCalculated = true;
 
   // Set current tab
@@ -1884,6 +2013,60 @@ function validateInputs(
   return true;
 }
 
+// Refinance-specific validation (appraised value based)
+function validateRefinanceInputs(
+  appraisedValue,
+  loanAmount,
+  loanTerm,
+  interestRate,
+  propertyTax,
+  homeInsurance,
+  pmiAmount
+) {
+  if (isNaN(appraisedValue) || appraisedValue <= 0) {
+    showErrorMessage("Please enter a valid appraised value");
+    return false;
+  }
+
+  if (isNaN(loanAmount) || loanAmount <= 0) {
+    showErrorMessage("Please enter a valid refinance loan amount");
+    return false;
+  }
+
+  if (loanAmount > appraisedValue) {
+    showErrorMessage("Loan amount cannot exceed appraised value");
+    return false;
+  }
+
+  if (isNaN(loanTerm) || loanTerm <= 0) {
+    showErrorMessage("Please enter a valid loan term");
+    return false;
+  }
+
+  // Allow zero-interest refinance (handled by zero-interest PI fallback)
+  if (isNaN(interestRate) || interestRate < 0) {
+    showErrorMessage("Please enter a valid interest rate (cannot be negative)");
+    return false;
+  }
+
+  if (!isNaN(propertyTax) && propertyTax < 0) {
+    showErrorMessage("Property tax must be a number ≥ 0");
+    return false;
+  }
+
+  if (!isNaN(homeInsurance) && homeInsurance < 0) {
+    showErrorMessage("Home insurance must be a number ≥ 0");
+    return false;
+  }
+
+  if (!isNaN(pmiAmount) && pmiAmount < 0) {
+    showErrorMessage("PMI amount must be a number ≥ 0");
+    return false;
+  }
+
+  return true;
+}
+
 // Update UI with calculation results
 function updateResultsUI(
   loanAmount,
@@ -1911,9 +2094,20 @@ function updateResultsUI(
     }).format(value);
   };
 
+  // Prefer schedule PMI (month 1) for display if available to align with LTV gating
+  const pmiForDisplay =
+    amortizationData && amortizationData.length > 0
+      ? amortizationData[0].pmi || 0
+      : monthlyPMI;
+
   // Update main results section
   document.getElementById("monthlyPayment").textContent =
     formatCurrency(totalMonthlyPayment);
+  // Base payment = total without extra
+  const baseMonthlyPayment =
+    monthlyPI + pmiForDisplay + monthlyPropertyTax + monthlyHomeInsurance + hoa;
+  const baseEl = document.getElementById("baseMonthlyPayment");
+  if (baseEl) baseEl.textContent = formatCurrency(baseMonthlyPayment);
   document.getElementById("loanAmount").textContent =
     formatCurrency(loanAmount);
   document.getElementById("totalInterest").textContent =
@@ -1924,11 +2118,51 @@ function updateResultsUI(
     formatCurrency(monthlyPropertyTax);
   document.getElementById("insuranceAmount").textContent =
     formatCurrency(monthlyHomeInsurance);
-  document.getElementById("pmiAmount").textContent = formatCurrency(monthlyPMI);
+  document.getElementById("pmiAmount").textContent =
+    formatCurrency(pmiForDisplay);
   document.getElementById("hoaAmount").textContent = formatCurrency(hoa);
   document.getElementById("extraAmount").textContent =
     formatCurrency(extraPayment);
   document.getElementById("totalCost").textContent = formatCurrency(totalCost);
+
+  // Refi: Show closing costs & points handling if available
+  try {
+    const infoRow = document.getElementById("refiCostsInfoRow");
+    const infoEl = document.getElementById("refiCostsInfo");
+    if (
+      formType === "refinance" &&
+      refinanceData &&
+      refinanceData.refinanceCosts &&
+      infoRow &&
+      infoEl
+    ) {
+      const rc = refinanceData.refinanceCosts;
+      const totalCosts = rc.financedCosts || 0;
+      if (totalCosts > 0) {
+        const pointsPctText = (rc.pointsPercent || 0).toFixed(2) + "%";
+        const pointsAmtText = formatCurrency(rc.pointsAmount || 0);
+        const closingText = formatCurrency(rc.closingCosts || 0);
+        const modeText = rc.financeCosts
+          ? "Included in Loan"
+          : "Due at Closing";
+        const modeAmount = rc.financeCosts ? totalCosts : rc.dueAtClosing || 0;
+        const cashOutText =
+          rc.cashOutAmount && rc.cashOutAmount > 0
+            ? `, Cash-Out: ${formatCurrency(rc.cashOutAmount)}`
+            : "";
+        infoEl.textContent = `${modeText}: ${formatCurrency(
+          modeAmount
+        )} (Closing: ${closingText}, Points: ${pointsPctText} = ${pointsAmtText}${cashOutText})`;
+        infoRow.style.display = "block";
+      } else {
+        infoRow.style.display = "none";
+      }
+    } else if (infoRow) {
+      infoRow.style.display = "none";
+    }
+  } catch (e) {
+    // ignore UI adornment errors
+  }
 
   // Update summary tab content
   document.getElementById("summaryPI").textContent = formatCurrency(monthlyPI);
@@ -1936,7 +2170,7 @@ function updateResultsUI(
     monthlyPropertyTax + monthlyHomeInsurance
   );
   document.getElementById("summaryPMI").textContent =
-    formatCurrency(monthlyPMI);
+    formatCurrency(pmiForDisplay);
   document.getElementById("summaryHOA").textContent = formatCurrency(hoa);
   document.getElementById("summaryLTV").textContent =
     loanToValueRatio.toFixed(2) + "%";
@@ -1950,11 +2184,50 @@ function updateResultsUI(
   if (amortizationData && amortizationData.length > 0) {
     // Use the actual payoff date from the last payment in the schedule
     payoffDate = amortizationData[amortizationData.length - 1].paymentDate;
+    // Determine PMI drop-off status from schedule
+    const hasPmi = amortizationData.some((r) => r.pmi && r.pmi > 0);
+    // First month where PMI becomes 0 after having PMI previously
+    let sawPmi = false;
+    let dropIndex = -1;
+    if (hasPmi) {
+      for (let i = 0; i < amortizationData.length; i++) {
+        const row = amortizationData[i];
+        if (row.pmi && row.pmi > 0) sawPmi = true;
+        if (sawPmi && (!row.pmi || row.pmi === 0)) {
+          dropIndex = i;
+          break;
+        }
+      }
+    }
+    const dropRow = document.getElementById("summaryPMIDropRow");
+    const dropSpan = document.getElementById("summaryPMIDrop");
+    if (dropRow && dropSpan) {
+      // Always show the row with an explicit status
+      dropRow.style.display = "block";
+      if (hasPmi && dropIndex >= 0) {
+        const dropDate = amortizationData[dropIndex].paymentDate;
+        const dateText = dropDate.toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+        });
+        dropSpan.textContent = `${dateText} (Payment #${dropIndex + 1})`;
+      } else if (hasPmi && dropIndex === -1) {
+        dropSpan.textContent = "Never (PMI lasts full term)";
+      } else {
+        dropSpan.textContent = "N/A (No PMI)";
+      }
+    }
   } else {
     // Fallback to original calculation
     const currentDate = new Date();
     payoffDate = new Date(currentDate);
     payoffDate.setFullYear(currentDate.getFullYear() + loanTerm);
+    const dropRow = document.getElementById("summaryPMIDropRow");
+    const dropSpan = document.getElementById("summaryPMIDrop");
+    if (dropRow && dropSpan) {
+      dropRow.style.display = "none";
+      dropSpan.textContent = "—";
+    }
   }
 
   const payoffDateFormatted = payoffDate.toLocaleDateString("en-US", {
@@ -1977,8 +2250,10 @@ function updateResultsUI(
     const originalTotalInterest = monthlyPI * originalPayments - loanAmount;
     const interestSaved = originalTotalInterest - totalInterest;
 
-    // Show savings information (you can add these elements to your HTML)
-    if (document.getElementById("extraPaymentSavings")) {
+    const extraPaymentSavingsEl = document.getElementById(
+      "extraPaymentSavings"
+    );
+    if (extraPaymentSavingsEl) {
       let savingsText = `Extra Payment Savings: `;
       if (yearsSaved > 0) {
         savingsText += `${yearsSaved} year${yearsSaved > 1 ? "s" : ""} `;
@@ -1987,24 +2262,28 @@ function updateResultsUI(
             remainingMonths > 1 ? "s" : ""
           } `;
         }
-      } else if (remainingMonths > 0) {
-        savingsText += `${remainingMonths} month${
-          remainingMonths > 1 ? "s" : ""
-        } `;
       }
       savingsText += `earlier payoff, ${formatCurrency(
         interestSaved
       )} interest saved`;
-      document.getElementById("extraPaymentSavings").textContent = savingsText;
-      document.getElementById("extraPaymentSavings").style.display = "block";
+      extraPaymentSavingsEl.textContent = savingsText;
+      extraPaymentSavingsEl.style.display = "block";
     }
-  } else if (document.getElementById("extraPaymentSavings")) {
-    document.getElementById("extraPaymentSavings").style.display = "none";
+  } else {
+    const extraPaymentSavingsEl = document.getElementById(
+      "extraPaymentSavings"
+    );
+    if (extraPaymentSavingsEl) {
+      extraPaymentSavingsEl.style.display = "none";
+    }
   }
 
   // Show/hide HOA sections based on form type
   const hoaSummarySection = document.getElementById("hoaSummarySection");
   const summaryHOASection = document.getElementById("summaryHOASection");
+  const baseMonthlyPaymentContainer = document
+    .getElementById("baseMonthlyPayment")
+    ?.closest(".result-item");
   if (hoaSummarySection) {
     hoaSummarySection.style.display =
       formType === "purchase" ? "block" : "none";
@@ -2012,6 +2291,13 @@ function updateResultsUI(
   if (summaryHOASection) {
     summaryHOASection.style.display =
       formType === "purchase" ? "block" : "none";
+  }
+  // Show Base Monthly Payment only if extraPayment > 0 and not for HELOC
+  if (baseMonthlyPaymentContainer) {
+    const shouldShowBase = formType !== "heloc" && Number(extraPayment) > 0;
+    baseMonthlyPaymentContainer.style.display = shouldShowBase
+      ? "block"
+      : "none";
   }
 }
 
@@ -2024,15 +2310,23 @@ function generateAmortizationSchedule(
   monthlyHomeInsurance,
   monthlyPMI,
   hoa,
-  extraPayment = 0
+  extraPayment = 0,
+  appraisedValue = 0,
+  isRefinance = false,
+  pmiEndThresholdLtv = 80
 ) {
   const schedule = [];
   let balance = loanAmount;
+  // Handle zero-interest schedules gracefully (align with calculateMortgage)
   const monthlyPI =
-    (loanAmount *
-      (monthlyInterestRate *
-        Math.pow(1 + monthlyInterestRate, numberOfPayments))) /
-    (Math.pow(1 + monthlyInterestRate, numberOfPayments) - 1);
+    monthlyInterestRate === 0
+      ? numberOfPayments > 0
+        ? loanAmount / numberOfPayments
+        : 0
+      : (loanAmount *
+          (monthlyInterestRate *
+            Math.pow(1 + monthlyInterestRate, numberOfPayments))) /
+        (Math.pow(1 + monthlyInterestRate, numberOfPayments) - 1);
 
   // Get current date for payment schedule
   const currentDate = new Date();
@@ -2061,15 +2355,30 @@ function generateAmortizationSchedule(
     const actualExtraPayment = totalPrincipalPayment - principalPayment;
     principalPayment = totalPrincipalPayment;
 
-    // Calculate PMI (if applicable and LTV > 80%)
-    // Fix: Use original property value for proper LTV calculation
-    const originalPropertyValue =
-      loanAmount /
-      (1 - document.getElementById("downPaymentPercent").value / 100);
-    const loanToValueRatio = (balance / originalPropertyValue) * 100;
-    const pmiRate = parseFloat(document.getElementById("pmiRate").value);
-    // Recalculate PMI for each payment based on current balance
-    const pmi = loanToValueRatio > 80 ? (pmiRate / 100 / 12) * balance : 0;
+    // Calculate PMI
+    let pmi = 0;
+    if (isRefinance && appraisedValue > 0) {
+      // Refinance: Use user-entered monthly PMI amount, drop when LTV <= threshold
+      const ltv = (balance / appraisedValue) * 100;
+      pmi = ltv > pmiEndThresholdLtv ? monthlyPMI : 0;
+    } else {
+      // Purchase: derive from purchase fields and drop at threshold LTV
+      const downPctEl = document.getElementById("downPaymentPercent");
+      const pmiRateEl = document.getElementById("pmiRate");
+      if (downPctEl && pmiRateEl) {
+        const originalPropertyValue =
+          loanAmount / (1 - parseFloat(downPctEl.value || 0) / 100);
+        const loanToValueRatio = (balance / originalPropertyValue) * 100;
+        const pmiRate = parseFloat(pmiRateEl.value || 0);
+        pmi =
+          loanToValueRatio > pmiEndThresholdLtv
+            ? (pmiRate / 100 / 12) * balance
+            : 0;
+      } else {
+        // Fallback: use provided monthlyPMI as-is
+        pmi = monthlyPMI;
+      }
+    }
 
     // Update remaining balance
     balance -= principalPayment;
@@ -2361,6 +2670,7 @@ function updateAmortizationTable(formType = "purchase") {
         )}</td>
         <td>${currencyFormatter.format(row.extraPayment || 0)}</td>
         <td>${currencyFormatter.format(row.interest)}</td>
+        <td>${currencyFormatter.format(row.pmi || 0)}</td>
         <td>${currencyFormatter.format(row.balance)}</td>
       `;
     }
@@ -2372,7 +2682,7 @@ function updateAmortizationTable(formType = "purchase") {
   if (currentAmortizationData.length > displayCount) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td colspan="7" class="text-center">
+      <td colspan="8" class="text-center">
         <em>Showing ${displayCount} of ${currentAmortizationData.length} payments. Export to CSV for full schedule.</em>
       </td>
     `;
@@ -2885,14 +3195,55 @@ function toggleComparisonPmiMode(loanLetter) {
 
 // Export amortization schedule to CSV
 function exportToCSV() {
-  if (!amortizationData.length) {
-    alert("Please calculate mortgage first.");
+  // Use current tab's amortization data
+  let tabData;
+  if (currentTab === "purchase") {
+    tabData = purchaseData;
+  } else if (currentTab === "refinance") {
+    tabData = refinanceData;
+  } else if (currentTab === "heloc") {
+    tabData = helocData;
+  }
+
+  const data = tabData?.amortizationData || [];
+  if (!data.length) {
+    alert(`Please calculate ${currentTab.toUpperCase()} first.`);
     return;
   }
 
-  // Format data for CSV
-  const rows = [
-    [
+  const rows = [];
+
+  if (currentTab === "heloc") {
+    // HELOC-specific CSV structure
+    rows.push([
+      "Payment #",
+      "Payment Date",
+      "Payment Amount",
+      "Principal",
+      "Interest",
+      "Balance",
+      "Phase",
+      "Extra Payment",
+    ]);
+
+    data.forEach((row) => {
+      const date = `${(row.paymentDate.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}/${row.paymentDate.getFullYear()}`;
+      rows.push([
+        row.paymentNumber,
+        date,
+        (row.payment || 0).toFixed(2),
+        (row.principalPayment || 0).toFixed(2),
+        (row.interestPayment || 0).toFixed(2),
+        (row.balance || 0).toFixed(2),
+        row.phase || "",
+        (row.extraPayment || 0).toFixed(2),
+      ]);
+    });
+  } else {
+    // Purchase/Refinance CSV structure
+    rows.push([
       "Payment #",
       "Payment Date",
       "Payment Amount",
@@ -2903,27 +3254,28 @@ function exportToCSV() {
       "Insurance",
       "PMI",
       "HOA",
-    ],
-  ];
-
-  // Add data rows
-  amortizationData.forEach((row) => {
-    const date = `${
-      row.paymentDate.getMonth() + 1
-    }/${row.paymentDate.getFullYear()}`;
-    rows.push([
-      row.paymentNumber,
-      date,
-      row.payment.toFixed(2),
-      row.principal.toFixed(2),
-      row.interest.toFixed(2),
-      row.balance.toFixed(2),
-      row.propertyTax.toFixed(2),
-      row.insurance.toFixed(2),
-      row.pmi.toFixed(2),
-      row.hoa.toFixed(2),
+      "Extra Payment",
     ]);
-  });
+
+    data.forEach((row) => {
+      const date = `${(row.paymentDate.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}/${row.paymentDate.getFullYear()}`;
+      rows.push([
+        row.paymentNumber,
+        date,
+        row.payment.toFixed(2),
+        row.principal.toFixed(2),
+        row.interest.toFixed(2),
+        row.balance.toFixed(2),
+        (row.propertyTax || 0).toFixed(2),
+        (row.insurance || 0).toFixed(2),
+        (row.pmi || 0).toFixed(2),
+        (row.hoa || 0).toFixed(2),
+        (row.extraPayment || 0).toFixed(2),
+      ]);
+    });
+  }
 
   // Generate CSV content
   let csvContent = "";
@@ -3016,8 +3368,19 @@ function getLogoDataURL() {
 
 // Export amortization schedule to PDF
 function exportToPDF() {
+  // Resolve amortization data from current tab
+  let tabData;
+  if (currentTab === "purchase") {
+    tabData = purchaseData;
+  } else if (currentTab === "refinance") {
+    tabData = refinanceData;
+  } else if (currentTab === "heloc") {
+    tabData = helocData;
+  }
+
+  const amortizationData = tabData?.amortizationData || [];
   if (!amortizationData.length) {
-    showErrorMessage("Please calculate mortgage first.");
+    showErrorMessage(`Please calculate ${currentTab.toUpperCase()} first.`);
     return;
   }
 
@@ -3078,13 +3441,23 @@ function exportToPDF() {
         14,
         38
       );
+      // Pull tab-specific rate/term for header labels
+      let headerRateElId = "interestRate";
+      let headerTermElId = "loanTerm";
+      if (currentTab === "refinance") {
+        headerRateElId = "refinanceInterestRate";
+        headerTermElId = "refinanceLoanTerm";
+      } else if (currentTab === "heloc") {
+        headerRateElId = "helocInterestRate";
+        headerTermElId = "helocRepaymentPeriod";
+      }
       doc.text(
-        `Interest Rate: ${document.getElementById("interestRate").value}%`,
+        `Interest Rate: ${document.getElementById(headerRateElId).value}%`,
         14,
         46
       );
       doc.text(
-        `Loan Term: ${document.getElementById("loanTerm").value} years`,
+        `Loan Term: ${document.getElementById(headerTermElId).value} years`,
         14,
         54
       );
@@ -3267,7 +3640,11 @@ async function exportFullReport() {
     doc.setFontSize(16);
     doc.setTextColor(44, 62, 80);
     const summaryTitle =
-      currentTab === "heloc" ? "HELOC Summary" : "Mortgage Summary";
+      currentTab === "heloc"
+        ? "HELOC Summary"
+        : currentTab === "refinance"
+        ? "Refinance Summary"
+        : "Purchase Summary";
     doc.text(summaryTitle, 14, contentStartY);
 
     // Add divider line
@@ -3438,6 +3815,134 @@ async function exportFullReport() {
       doc.text(`Total Interest: $${totalInterest.toLocaleString()}`, 14, y);
       y += 8;
       doc.text(`Total of Payments: $${totalCost.toLocaleString()}`, 14, y);
+      y += 8;
+      // Add LTV (Month 1) line for purchase/refinance
+      doc.text(`LTV (Month 1): ${loanToValueRatio.toFixed(2)}%`, 14, y);
+      y += 8;
+      // Short PMI termination note (reflect selected rule)
+      doc.setFontSize(10);
+      doc.setTextColor(120, 120, 120);
+      let pmiRuleText = "80%";
+      try {
+        if (currentTab === "refinance") {
+          const sel = document.getElementById("refinancePmiEndRule");
+          if (sel) pmiRuleText = `${parseFloat(sel.value) || 80}%`;
+        } else {
+          const sel = document.getElementById("pmiEndRule");
+          if (sel) pmiRuleText = `${parseFloat(sel.value) || 80}%`;
+        }
+      } catch (e) {
+        pmiRuleText = "80%";
+      }
+      doc.text(`PMI drops at ${pmiRuleText} LTV`, 14, y);
+      y += 8;
+      doc.setFontSize(12);
+      doc.setTextColor(44, 62, 80);
+      // Add PMI drop information if available
+      try {
+        if (Array.isArray(amortizationData) && amortizationData.length > 0) {
+          let sawPmi = false;
+          let dropIndex = -1;
+          for (let i = 0; i < amortizationData.length; i++) {
+            const r = amortizationData[i];
+            if ((r.pmi || 0) > 0) sawPmi = true;
+            if (sawPmi && (!r.pmi || r.pmi === 0)) {
+              dropIndex = i;
+              break;
+            }
+          }
+          if (sawPmi) {
+            if (dropIndex >= 0) {
+              const dropDate = amortizationData[dropIndex].paymentDate;
+              const dateText = dropDate.toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+              });
+              doc.text(
+                `PMI Ends: ${dateText} (Payment #${dropIndex + 1})`,
+                14,
+                y
+              );
+            } else {
+              doc.text("PMI Ends: Never (PMI lasts full term)", 14, y);
+            }
+          }
+        }
+      } catch (e) {
+        // noop if schedule not available
+      }
+
+      // For refinance, add Closing Costs & Points details
+      if (currentTab === "refinance" && tabData && tabData.refinanceCosts) {
+        // Ensure there's room; otherwise, add a new page
+        if (y + 36 > 280) {
+          doc.addPage();
+          y = 20;
+        } else {
+          y += 8;
+        }
+        const rc = tabData.refinanceCosts;
+        const modeText = rc.financeCosts
+          ? "Included in Loan"
+          : "Due at Closing";
+        const modeAmount = rc.financeCosts
+          ? rc.financedCosts || 0
+          : rc.dueAtClosing || 0;
+
+        doc.setFontSize(14);
+        doc.text("Closing Costs, Points & Cash-Out", 14, y);
+        y += 8;
+        doc.setFontSize(12);
+        doc.text(`Handling: ${modeText}`, 14, y);
+        y += 8;
+        doc.text(
+          `Closing Costs: $${(rc.closingCosts || 0).toLocaleString()}`,
+          14,
+          y
+        );
+        y += 8;
+        doc.text(
+          `Points: ${(rc.pointsPercent || 0).toFixed(2)}% = $${(
+            rc.pointsAmount || 0
+          ).toLocaleString()}`,
+          14,
+          y
+        );
+        y += 8;
+        doc.text(
+          `Cash-Out Amount: $${(rc.cashOutAmount || 0).toLocaleString()}`,
+          14,
+          y
+        );
+        y += 8;
+        doc.text(
+          `${
+            rc.financeCosts ? "Amount Added to Loan" : "Amount Due at Closing"
+          }: $${(modeAmount || 0).toLocaleString()}`,
+          14,
+          y
+        );
+        // Show base vs adjusted principal if available
+        if (
+          typeof rc.baseLoanAmount !== "undefined" &&
+          typeof rc.adjustedLoanAmount !== "undefined"
+        ) {
+          y += 8;
+          doc.text(
+            `Base Loan Amount: $${(rc.baseLoanAmount || 0).toLocaleString()}`,
+            14,
+            y
+          );
+          y += 8;
+          doc.text(
+            `Adjusted Loan Amount: $${(
+              rc.adjustedLoanAmount || 0
+            ).toLocaleString()}`,
+            14,
+            y
+          );
+        }
+      }
     }
 
     // Add payment breakdown section
@@ -3490,9 +3995,6 @@ async function exportFullReport() {
 
       if (currentTab === "refinance") {
         // Get values from refinance form inputs
-        const appraisedValue = parseFloat(
-          document.getElementById("appraisedValue").value || 0
-        );
         const refinancePropertyTax = parseFloat(
           document.getElementById("refinancePropertyTax").value || 0
         );
@@ -3509,16 +4011,12 @@ async function exportFullReport() {
         propertyTaxValue = `$${refinancePropertyTax.toLocaleString()}`;
         homeInsuranceValue = `$${refinanceHomeInsurance.toLocaleString()}`;
 
-        // PMI calculation based on toggle (monthly vs annual)
+        // PMI calculation based on toggle (monthly vs annual dollar amount)
         if (refinancePmiToggle) {
-          // Annual PMI rate - convert to monthly
-          pmiValue = `$${(
-            (appraisedValue * refinancePmiAmount) /
-            100 /
-            12
-          ).toLocaleString()}`;
+          // Annual PMI amount (dollars) - convert to monthly
+          pmiValue = `$${(refinancePmiAmount / 12).toLocaleString()}`;
         } else {
-          // Monthly PMI amount
+          // Monthly PMI amount (dollars)
           pmiValue = `$${refinancePmiAmount.toLocaleString()}`;
         }
 
@@ -3558,6 +4056,23 @@ async function exportFullReport() {
       y += 8;
       doc.text(`PMI: ${pmiValue}`, 14, y);
       y += 8;
+      // For refinance, add PMI mode note (monthly vs annual/12)
+      if (currentTab === "refinance") {
+        const refinancePmiToggle =
+          document.getElementById("refinancePmiToggle").checked;
+        doc.setFontSize(10);
+        doc.setTextColor(120, 120, 120);
+        doc.text(
+          `PMI Mode: ${
+            refinancePmiToggle ? "Annual amount ÷ 12" : "Monthly amount"
+          }`,
+          14,
+          y
+        );
+        y += 8;
+        doc.setFontSize(12);
+        doc.setTextColor(44, 62, 80);
+      }
 
       // Only show HOA for Purchase tab
       if (currentTab === "purchase") {
@@ -3582,8 +4097,67 @@ async function exportFullReport() {
       const originalTotalInterest = monthlyPI * originalPayments - loanAmount;
       const interestSaved = originalTotalInterest - totalInterest;
 
+      // Calculate PMI savings by comparing schedules (with extra vs no extra)
+      let pmiSavingsAmount = 0;
+      let pmiMonthsEarlier = 0;
+      try {
+        // Determine inputs for schedule generation
+        const rateNum = parseFloat(interestRateValue || 0);
+        const monthlyRate = isNaN(rateNum) ? 0 : rateNum / 100 / 12;
+        const nper = loanTerm * 12;
+
+        // For refinance, pass appraised value and flag; otherwise not required
+        let appraisedVal = 0;
+        const isRefi = currentTab === "refinance";
+        if (isRefi) {
+          const appraisedEl = document.getElementById("appraisedValue");
+          appraisedVal =
+            parseFloat(
+              (appraisedEl?.value || 0).toString().replace(/,/g, "")
+            ) || 0;
+        }
+
+        // Generate a baseline schedule WITHOUT extra payments
+        const noExtraSchedule = generateAmortizationSchedule(
+          loanAmount,
+          monthlyRate,
+          nper,
+          monthlyPropertyTax,
+          monthlyHomeInsurance,
+          monthlyPMI,
+          hoa,
+          0, // no extra
+          appraisedVal,
+          isRefi
+        );
+
+        // Helper to sum PMI and find drop index
+        const sumPMI = (sched) => sched.reduce((s, r) => s + (r.pmi || 0), 0);
+        const findDropIndex = (sched) => {
+          let sawPmi = false;
+          for (let i = 0; i < sched.length; i++) {
+            const p = sched[i].pmi || 0;
+            if (p > 0) sawPmi = true;
+            if (sawPmi && p === 0) return i; // first zero after any positive PMI
+          }
+          return -1;
+        };
+
+        const pmiWithExtra = sumPMI(amortizationData);
+        const pmiNoExtra = sumPMI(noExtraSchedule);
+        pmiSavingsAmount = Math.max(0, pmiNoExtra - pmiWithExtra);
+
+        const dropWithExtra = findDropIndex(amortizationData);
+        const dropNoExtra = findDropIndex(noExtraSchedule);
+        if (dropWithExtra >= 0 && dropNoExtra >= 0) {
+          pmiMonthsEarlier = Math.max(0, dropNoExtra - dropWithExtra);
+        }
+      } catch (e) {
+        console.warn("PMI savings calc skipped:", e);
+      }
+
       // Calculate total height needed for entire section including the box
-      const sectionHeight = 70; // Approximate height for title + 3 lines + box
+      const sectionHeight = 86; // Increased to accommodate PMI savings lines
 
       // Check if entire section fits on current page, if not start new page
       if (y + sectionHeight > 280) {
@@ -3629,6 +4203,22 @@ async function exportFullReport() {
       // Interest savings
       doc.text(`Interest Savings: $${interestSaved.toLocaleString()}`, 14, y);
       y += 8; // Reduced line spacing
+
+      // PMI savings (if any)
+      if (pmiSavingsAmount > 0 || pmiMonthsEarlier > 0) {
+        doc.text(`PMI Savings: $${pmiSavingsAmount.toLocaleString()}`, 14, y);
+        y += 8;
+        if (pmiMonthsEarlier > 0) {
+          doc.text(
+            `PMI Drop Moved Up: ${pmiMonthsEarlier} month${
+              pmiMonthsEarlier !== 1 ? "s" : ""
+            }`,
+            14,
+            y
+          );
+          y += 8;
+        }
+      }
 
       // Extra payment amount for reference
       doc.text(
@@ -3677,16 +4267,19 @@ async function exportFullReport() {
     doc.setFontSize(10);
     doc.setTextColor(44, 62, 80);
     doc.text("Payment #", 14, y);
-    doc.text("Date", 35, y);
-    doc.text("Payment", 60, y);
-    doc.text("Principal", 85, y);
-    doc.text("Interest", 110, y);
-    doc.text("Balance", 140, y);
+    doc.text("Date", 30, y);
+    doc.text("Payment", 55, y);
+    doc.text("Principal", 80, y);
+    doc.text("Interest", 105, y);
+    doc.text("Balance", 130, y);
     if (currentTab === "heloc") {
-      doc.text("Phase", 170, y);
+      doc.text("Phase", 155, y);
+      doc.text("Extra", 175, y);
+      doc.line(14, y + 2, 190, y + 2);
+    } else {
+      doc.text("Extra", 155, y);
+      doc.line(14, y + 2, 185, y + 2);
     }
-
-    doc.line(14, y + 2, 175, y + 2);
     y += 10;
 
     // Add all amortization payments with pagination
@@ -3740,20 +4333,22 @@ async function exportFullReport() {
       doc.setFontSize(9);
       doc.setTextColor(44, 62, 80);
       doc.text(row.paymentNumber.toString(), 14, y);
-      doc.text(date, 35, y);
-      doc.text("$" + row.payment.toFixed(2), 60, y);
+      doc.text(date, 30, y);
+      doc.text("$" + row.payment.toFixed(2), 55, y);
 
       if (currentTab === "heloc") {
         // HELOC has different data structure
-        doc.text("$" + (row.principalPayment || 0).toFixed(2), 85, y);
-        doc.text("$" + row.interestPayment.toFixed(2), 110, y);
-        doc.text("$" + row.balance.toFixed(2), 140, y);
-        doc.text(row.phase || "", 170, y);
+        doc.text("$" + (row.principalPayment || 0).toFixed(2), 80, y);
+        doc.text("$" + row.interestPayment.toFixed(2), 105, y);
+        doc.text("$" + row.balance.toFixed(2), 130, y);
+        doc.text(row.phase || "", 155, y);
+        doc.text("$" + (row.extraPayment || 0).toFixed(2), 175, y);
       } else {
         // Regular mortgage structure
-        doc.text("$" + row.principal.toFixed(2), 85, y);
-        doc.text("$" + row.interest.toFixed(2), 110, y);
-        doc.text("$" + row.balance.toFixed(2), 140, y);
+        doc.text("$" + row.principal.toFixed(2), 80, y);
+        doc.text("$" + row.interest.toFixed(2), 105, y);
+        doc.text("$" + row.balance.toFixed(2), 130, y);
+        doc.text("$" + (row.extraPayment || 0).toFixed(2), 155, y);
       }
 
       y += 6;
@@ -3783,13 +4378,19 @@ async function exportFullReport() {
 
         doc.setFontSize(10);
         doc.text("Payment #", 14, y);
-        doc.text("Date", 35, y);
-        doc.text("Payment", 60, y);
-        doc.text("Principal", 85, y);
-        doc.text("Interest", 110, y);
-        doc.text("Balance", 140, y);
-
-        doc.line(14, y + 2, 175, y + 2);
+        doc.text("Date", 30, y);
+        doc.text("Payment", 55, y);
+        doc.text("Principal", 80, y);
+        doc.text("Interest", 105, y);
+        doc.text("Balance", 130, y);
+        if (currentTab === "heloc") {
+          doc.text("Phase", 155, y);
+          doc.text("Extra", 175, y);
+          doc.line(14, y + 2, 190, y + 2);
+        } else {
+          doc.text("Extra", 155, y);
+          doc.line(14, y + 2, 185, y + 2);
+        }
         y += 10;
       }
     }
@@ -4167,14 +4768,16 @@ async function exportFullReport() {
           function addTableHeader() {
             doc.setFontSize(9);
             doc.setTextColor(100, 100, 100);
+            // Adjusted positions to include Extra column
             doc.text("Pmt #", 14, y);
-            doc.text("Date", 30, y);
-            doc.text("Payment", 50, y);
-            doc.text("Principal", 70, y);
-            doc.text("Interest", 92, y);
-            doc.text("Balance", 115, y);
-            doc.text("Cum. Interest", 145, y);
-            doc.text("Cum. Principal", 175, y);
+            doc.text("Date", 26, y);
+            doc.text("Payment", 44, y);
+            doc.text("Principal", 62, y);
+            doc.text("Interest", 80, y);
+            doc.text("Balance", 100, y);
+            doc.text("Extra", 118, y);
+            doc.text("Cum. Int.", 140, y);
+            doc.text("Cum. Prin.", 162, y);
 
             // Add horizontal line
             doc.setDrawColor(200, 200, 200);
@@ -4205,14 +4808,14 @@ async function exportFullReport() {
 
             // Use fixed-width positioning for better alignment
             doc.text(row.paymentNumber.toString(), 14, y, { align: "left" });
-            doc.text(date, 30, y, { align: "left" });
+            doc.text(date, 26, y, { align: "left" });
             doc.text(
               "$" +
                 row.payment.toLocaleString("en-US", {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 }),
-              50,
+              44,
               y,
               { align: "left" }
             );
@@ -4222,7 +4825,7 @@ async function exportFullReport() {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 }),
-              70,
+              62,
               y,
               { align: "left" }
             );
@@ -4232,7 +4835,7 @@ async function exportFullReport() {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 }),
-              92,
+              80,
               y,
               { align: "left" }
             );
@@ -4242,7 +4845,17 @@ async function exportFullReport() {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 }),
-              115,
+              100,
+              y,
+              { align: "left" }
+            );
+            doc.text(
+              "$" +
+                (row.extraPayment || 0).toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }),
+              118,
               y,
               { align: "left" }
             );
@@ -4252,7 +4865,7 @@ async function exportFullReport() {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 }),
-              145,
+              140,
               y,
               { align: "left" }
             );
@@ -4262,7 +4875,7 @@ async function exportFullReport() {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 }),
-              175,
+              162,
               y,
               { align: "left" }
             );
