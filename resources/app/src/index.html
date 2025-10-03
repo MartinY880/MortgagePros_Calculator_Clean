@@ -113,85 +113,100 @@
                   </div>
                 </div>
 
+                <!-- Advanced Options Accordion -->
                 <div class="row mb-3">
-                  <div class="col-md-6">
-                    <div class="form-group">
-                      <div class="d-flex justify-content-between align-items-center mb-2">
-                        <label for="refinancePmiAmount" id="refinancePmiLabel">PMI Monthly Amount ($):</label>
-                        <div class="form-check form-switch">
-                          <input class="form-check-input" type="checkbox" id="refinancePmiToggle">
-                          <label class="form-check-label" for="refinancePmiToggle" id="refinancePmiToggleLabel">
-                            Monthly
-                          </label>
+                  <div class="col-12">
+                    <div class="accordion" id="refinanceAdvancedAccordion">
+                      <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingRefiAdvanced">
+                          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseRefiAdvanced" aria-expanded="false" aria-controls="collapseRefiAdvanced">
+                            Advanced Options (Extra Payment,HOI, PMI, Taxes, Closing Costs, etc...)
+                          </button>
+                        </h2>
+                        <div id="collapseRefiAdvanced" class="accordion-collapse collapse" aria-labelledby="headingRefiAdvanced" data-bs-parent="#refinanceAdvancedAccordion">
+                          <div class="accordion-body">
+                            <div class="row">
+                              <div class="col-md-6">
+                                <div class="form-group">
+                                  <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label for="refinancePmiAmount" id="refinancePmiLabel">PMI Monthly Amount ($):</label>
+                                    <div class="form-check form-switch">
+                                      <input class="form-check-input" type="checkbox" id="refinancePmiToggle">
+                                      <label class="form-check-label" for="refinancePmiToggle" id="refinancePmiToggleLabel">
+                                        Monthly
+                                      </label>
+                                    </div>
+                                  </div>
+                                  <input type="text" inputmode="decimal" id="refinancePmiAmount" class="form-control" value="0" placeholder="e.g., 125">
+                                </div>
+                                <div class="form-group mt-2">
+                                  <label for="refinancePmiEndRule">PMI Ends at:</label>
+                                  <select id="refinancePmiEndRule" class="form-select">
+                                    <option value="80" selected>80% LTV</option>
+                                    <option value="78">78% LTV</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div class="col-md-6">
+                                <div class="form-group">
+                                  <label for="refinancePropertyTax">Property Tax (Monthly $):</label>
+                                  <input type="text" inputmode="numeric" id="refinancePropertyTax" class="form-control" value="0">
+                                </div>
+                                <div class="form-group mt-2">
+                                  <label for="refinanceCashOut">Cash-Out Amount ($):</label>
+                                  <input type="text" inputmode="decimal" id="refinanceCashOut" class="form-control" value="0" placeholder="e.g., 10000">
+                                  <small class="text-muted">Optional: additional cash taken out, added to loan principal.</small>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div class="row mt-3">
+                              <div class="col-md-6">
+                                <div class="form-group">
+                                  <label for="refinanceHomeInsurance">Home Insurance (Monthly $):</label>
+                                  <input type="text" inputmode="numeric" id="refinanceHomeInsurance" class="form-control" value="0">
+                                </div>
+                              </div>
+                              <div class="col-md-6">
+                                <div class="form-group">
+                                  <label for="refinanceExtraPayment">Extra Monthly Payment ($):</label>
+                                  <input type="text" inputmode="numeric" id="refinanceExtraPayment" class="form-control" value="0">
+                                </div>
+                              </div>
+                            </div>
+
+                            <!-- Closing Costs & Points -->
+                            <div class="row mt-3">
+                              <div class="col-md-6">
+                                <div class="form-group">
+                                  <label for="refinanceClosingCosts">Closing Costs ($):</label>
+                                  <input type="text" inputmode="decimal" id="refinanceClosingCosts" class="form-control" value="0" placeholder="e.g., 3500">
+                                </div>
+                              </div>
+                              <div class="col-md-6">
+                                <div class="form-group">
+                                  <label for="refinancePoints">Points (% of loan amount):</label>
+                                  <input type="text" inputmode="decimal" id="refinancePoints" class="form-control" value="0" placeholder="e.g., 1">
+                                </div>
+                              </div>
+                            </div>
+
+                            <div class="row mt-3">
+                              <div class="col-md-8">
+                                <label class="form-label d-block mb-2">Closing Costs Handling</label>
+                                <div class="form-check form-check-inline">
+                                  <input class="form-check-input" type="radio" name="refinanceCostHandling" id="refiCosts_due" value="due" checked>
+                                  <label class="form-check-label" for="refiCosts_due">Due at Closing</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                  <input class="form-check-input" type="radio" name="refinanceCostHandling" id="refiCosts_finance" value="finance">
+                                  <label class="form-check-label" for="refiCosts_finance">Include in Loan Amount</label>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <input type="text" inputmode="decimal" id="refinancePmiAmount" class="form-control" value="0" placeholder="e.g., 125">
-                    </div>
-                    <div class="form-group mt-2">
-                      <label for="refinancePmiEndRule">PMI Ends at:</label>
-                      <select id="refinancePmiEndRule" class="form-select">
-                        <option value="80" selected>80% LTV</option>
-                        <option value="78">78% LTV</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div class="col-md-6">
-                    <div class="form-group">
-                      <label for="refinancePropertyTax">Property Tax (Monthly $):</label>
-                      <input type="text" inputmode="numeric" id="refinancePropertyTax" class="form-control" value="0">
-                    </div>
-                    <div class="form-group mt-2">
-                      <label for="refinanceCashOut">Cash-Out Amount ($):</label>
-                      <input type="text" inputmode="decimal" id="refinanceCashOut" class="form-control" value="0" placeholder="e.g., 10000">
-                      <small class="text-muted">Optional: additional cash taken out, added to loan principal.</small>
-                    </div>
-                  </div>
-                </div>
-                <div class="row mb-3">
-                  <div class="col-md-6">
-                    <div class="form-group">
-                      <label for="refinanceHomeInsurance">Home Insurance (Monthly $):</label>
-                      <input type="text" inputmode="numeric" id="refinanceHomeInsurance" class="form-control" value="0">
-                    </div>
-                  </div>
-                  <div class="col-md-6">
-                    <div class="form-group">
-                      <label for="refinanceExtraPayment">Extra Monthly Payment ($):</label>
-                      <input type="text" inputmode="numeric" id="refinanceExtraPayment" class="form-control" value="0">
-                    </div>
-                  </div>
-                </div>
-                <div class="row mb-3">
-                  <div class="col-md-6">
-                  </div>
-                </div>
-
-                <!-- Closing Costs & Points -->
-                <div class="row mb-3">
-                  <div class="col-md-6">
-                    <div class="form-group">
-                      <label for="refinanceClosingCosts">Closing Costs ($):</label>
-                      <input type="text" inputmode="decimal" id="refinanceClosingCosts" class="form-control" value="0" placeholder="e.g., 3500">
-                    </div>
-                  </div>
-                  <div class="col-md-6">
-                    <div class="form-group">
-                      <label for="refinancePoints">Points (% of loan amount):</label>
-                      <input type="text" inputmode="decimal" id="refinancePoints" class="form-control" value="0" placeholder="e.g., 1">
-                    </div>
-                  </div>
-                </div>
-
-                <div class="row mb-3">
-                  <div class="col-md-8">
-                    <label class="form-label d-block mb-2">Closing Costs Handling</label>
-                    <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="radio" name="refinanceCostHandling" id="refiCosts_due" value="due" checked>
-                      <label class="form-check-label" for="refiCosts_due">Due at Closing</label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                      <input class="form-check-input" type="radio" name="refinanceCostHandling" id="refiCosts_finance" value="finance">
-                      <label class="form-check-label" for="refiCosts_finance">Include in Loan Amount</label>
                     </div>
                   </div>
                 </div>
