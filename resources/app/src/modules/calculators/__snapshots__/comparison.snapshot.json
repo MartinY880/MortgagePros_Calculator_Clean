@@ -1,0 +1,23 @@
+{
+  "description": "Baseline snapshot for comparison scoring & PMI termination (Task 21)",
+  "version": 1,
+  "scenarios": {
+    "pmiDropExample": {
+      "input": {
+        "amount": 300000,
+        "rate": 6.0,
+        "term": 30,
+        "pmi": 150,
+        "propertyTax": 300,
+        "homeInsurance": 100,
+        "extra": 0,
+        "appraisedValue": 360000,
+        "pmiEndRule": 80
+      },
+      "expected": {
+        "pmiEndsMonth": 38,
+        "note": "Only pmiEndsMonth asserted; adjust if amortization logic changes."
+      }
+    }
+  }
+}

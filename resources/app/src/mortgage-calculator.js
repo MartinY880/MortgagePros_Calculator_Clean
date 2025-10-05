@@ -1291,89 +1291,73 @@ function calculateMortgage(formType = "purchase") {
   }
 
   // Calculate monthly interest rate
-  const monthlyInterestRate = interestRate / 100 / 12;
-
-  // Calculate number of payments
-  const numberOfPayments = loanTerm * 12;
-
-  // Calculate monthly principal and interest payment (handle zero-interest gracefully)
-  let monthlyPI;
-  if (monthlyInterestRate === 0) {
-    monthlyPI =
-      numberOfPayments > 0
-        ? (formType === "refinance" ? adjustedLoanAmount : loanAmount) /
-          numberOfPayments
-        : 0;
-  } else {
-    const principalBase =
-      formType === "refinance" ? adjustedLoanAmount : loanAmount;
-    monthlyPI =
-      (principalBase *
-        (monthlyInterestRate *
-          Math.pow(1 + monthlyInterestRate, numberOfPayments))) /
-      (Math.pow(1 + monthlyInterestRate, numberOfPayments) - 1);
-  }
-
-  // Determine PMI termination rule (LTV threshold)
-  let pmiEndThresholdLtv = 80; // default
+  // Determine PMI termination rule (LTV threshold) for builder (80/78)
+  let pmiEndThresholdLtv = 80; // default selector value
   try {
-    if (formType === "refinance") {
-      const sel = document.getElementById("refinancePmiEndRule");
-      if (sel) pmiEndThresholdLtv = parseFloat(sel.value) || 80;
-    } else if (formType === "purchase") {
-      const sel = document.getElementById("pmiEndRule");
-      if (sel) pmiEndThresholdLtv = parseFloat(sel.value) || 80;
-    }
-  } catch (e) {
+    const selectorId =
+      formType === "refinance" ? "refinancePmiEndRule" : "pmiEndRule";
+    const sel = document.getElementById(selectorId);
+    if (sel) pmiEndThresholdLtv = parseFloat(sel.value) || 80;
+  } catch (_e) {
     pmiEndThresholdLtv = 80;
   }
 
-  // Calculate PMI (if down payment < threshold for purchase, or if specified for refinance)
+  // Compute LTV base BEFORE building (refi may include financed costs)
   const ltvBase = formType === "refinance" ? adjustedLoanAmount : loanAmount;
-  const loanToValueRatio = (ltvBase / propertyValue) * 100;
-  let monthlyPMI;
+  const loanToValueRatio =
+    propertyValue > 0 ? (ltvBase / propertyValue) * 100 : 0;
 
+  // Derive a monthly PMI value compatible with ScheduleBuilder's expected pmi field
+  let monthlyPMI;
   if (formType === "refinance") {
-    // For refinance, check if PMI is in annual or monthly mode
     const pmiToggle = document.getElementById("refinancePmiToggle");
     const pmiAmount = pmiAmountRefi || 0;
-
-    if (pmiToggle && pmiToggle.checked) {
-      // Annual mode - convert to monthly
-      monthlyPMI = pmiAmount / 12;
-    } else {
-      // Monthly mode - use as is
-      monthlyPMI = pmiAmount;
-    }
+    monthlyPMI = pmiToggle && pmiToggle.checked ? pmiAmount / 12 : pmiAmount; // annual -> monthly if toggled
   } else {
-    // For purchase, PMI is calculated as a rate if LTV > threshold
+    // Purchase: only charge PMI if LTV above threshold at origination
     monthlyPMI =
       loanToValueRatio > pmiEndThresholdLtv
         ? (pmiRate / 100 / 12) * loanAmount
         : 0;
   }
 
-  // Calculate monthly property tax and insurance
-  const monthlyPropertyTax = propertyTax; // Property tax is now entered as monthly dollar amount
-  const monthlyHomeInsurance = homeInsurance; // Home insurance is entered as monthly dollar amount
+  // Build unified schedule & totals via ScheduleBuilder (Task 19 integration)
+  const builderInput = {
+    amount: formType === "refinance" ? adjustedLoanAmount : loanAmount,
+    rate: interestRate,
+    term: loanTerm,
+    pmi: monthlyPMI,
+    propertyTax: propertyTax, // already monthly entries
+    homeInsurance: homeInsurance, // already monthly
+    extra: extraPayment,
+    appraisedValue: propertyValue,
+    pmiEndRule: pmiEndThresholdLtv, // pass numeric (80/78)
+  };
+  const builderResult = buildFixedLoanSchedule(builderInput);
 
-  // Calculate a preliminary total monthly payment (including extra payment)
-  // Note: We'll align this with the amortization schedule (month 1) after generating it
+  // Map builder results to legacy variables expected by UI
+  const monthlyPI = builderResult.monthlyPI;
+  const monthlyPropertyTax = builderResult.monthlyPropertyTax;
+  const monthlyHomeInsurance = builderResult.monthlyInsurance;
+  const totalInterest = builderResult.totalInterest;
+  const totalCost = builderResult.totalCost;
+  // builderResult.totalMonthlyPayment omits HOA & extra (HOA not part of builder abstraction). Add them for displayed total.
   let totalMonthlyPayment =
-    monthlyPI +
-    monthlyPMI +
-    monthlyPropertyTax +
-    monthlyHomeInsurance +
-    hoa +
-    extraPayment;
-
-  // Base monthly payment without extra
+    builderResult.totalMonthlyPayment + hoa + extraPayment;
+  // For consistency with legacy path, include PMI in first payment only if it actually applies month 1 (ScheduleBuilder sets pmiMeta.pmiEndsMonth accordingly).
+  // baseMonthlyPayment (without extra) analogous to prior calculation
   const baseMonthlyPayment =
-    monthlyPI + monthlyPMI + monthlyPropertyTax + monthlyHomeInsurance + hoa;
+    builderResult.baseMonthlyPaymentNoPMI +
+    (builderResult.pmiMeta.pmiEndsMonth === 1
+      ? 0
+      : builderResult.monthlyPMIInput) +
+    hoa;
 
-  // Generate amortization schedule first to get accurate totals
+  // Build detailed amortization table (legacy format) using existing generator for UI table until migrated
+  const numberOfPayments = loanTerm * 12;
+  const monthlyInterestRate = interestRate / 100 / 12;
   const currentAmortizationData = generateAmortizationSchedule(
-    formType === "refinance" ? adjustedLoanAmount : loanAmount,
+    builderInput.amount,
     monthlyInterestRate,
     numberOfPayments,
     monthlyPropertyTax,
@@ -1385,25 +1369,15 @@ function calculateMortgage(formType = "purchase") {
     formType === "refinance",
     pmiEndThresholdLtv
   );
-
-  // Align displayed monthly payment with schedule (reflects PMI gating and extra payment capping)
   if (currentAmortizationData && currentAmortizationData.length > 0) {
+    // Align displayed payment with first schedule row (already includes extra + escrow + PMI + HOA)
     totalMonthlyPayment = currentAmortizationData[0].payment;
   }
-
-  // Calculate actual total interest and cost from schedule
-  const totalInterest = currentAmortizationData.reduce(
-    (sum, payment) => sum + payment.interest,
-    0
-  );
-  const totalCost = currentAmortizationData.reduce(
-    (sum, payment) => sum + payment.payment,
-    0
-  );
 
   // Store data in the appropriate tab structure
   const tabData = formType === "purchase" ? purchaseData : refinanceData;
   tabData.amortizationData = currentAmortizationData;
+  tabData.builderResult = builderResult; // persist unified engine output for exports / future UI
   tabData.calculationResults = [
     formType === "refinance" ? adjustedLoanAmount || loanAmount : loanAmount,
     monthlyPI,
@@ -1625,6 +1599,16 @@ function calculateHELOC() {
 
 // Loan Comparison Functions
 function calculateLoanComparison() {
+  // Normalize & validate inputs before pulling numeric values
+  const invalidFields = validateComparisonInputs();
+  if (invalidFields.length > 0) {
+    showErrorMessage(
+      `Please correct highlighted field${
+        invalidFields.length > 1 ? "s" : ""
+      } before comparing.`
+    );
+    return;
+  }
   // Get loan data for visible options only
   const loanA = getLoanData("A");
   const loanB = getLoanData("B");
@@ -1702,8 +1686,16 @@ function getLoanData(loanLetter) {
     parseFloat(document.getElementById(prefix + "homeInsurance").value) || 0;
   const extra =
     parseFloat(document.getElementById(prefix + "extra").value) || 0;
+  // PMI termination rule (80 or 78) default 80
+  let pmiEndRule = 80;
+  const pmiRuleEl = document.getElementById(prefix + "pmiEndRule");
+  if (pmiRuleEl && pmiRuleEl.value && !isNaN(parseFloat(pmiRuleEl.value))) {
+    pmiEndRule = parseFloat(pmiRuleEl.value);
+  }
 
-  const isValid = amount > 0 && rate > 0 && term > 0;
+  // Allow 0% interest loans (Task: zero‑interest safeguard). Previously required rate > 0 which rejected valid promo / special loans.
+  // Blank / non-numeric inputs already coerce to 0 above; if we ever need to distinguish intentional 0 vs empty, we can inspect the raw input value.
+  const isValid = amount > 0 && rate >= 0 && term > 0;
 
   return {
     name,
@@ -1718,108 +1710,227 @@ function getLoanData(loanLetter) {
     fees: 0, // Default to 0 since comparison form doesn't have fees input
     isValid,
     letter: loanLetter,
+    pmiEndRule,
   };
 }
+
+// Comparison Input Validation (Priority 1 Task 5)
+// Ensures numeric, non-negative; highlights invalid fields; returns array of invalid element IDs
+function validateComparisonInputs() {
+  const loanLetters = ["A", "B", "C"]; // C may be hidden; we'll skip hidden container
+  const numericFields = [
+    "appraisedValue",
+    "amount",
+    "rate",
+    "term",
+    "pmi",
+    "propertyTax",
+    "homeInsurance",
+    "extra",
+  ];
+  const invalid = [];
+
+  loanLetters.forEach((letter) => {
+    const column = document.getElementById(`loan${letter}_column`);
+    if (!column || column.classList.contains("d-none")) return; // skip hidden loan C
+    numericFields.forEach((field) => {
+      const el = document.getElementById(`loan${letter}_${field}`);
+      if (!el) return;
+      // Remove previous state
+      el.classList.remove("is-invalid");
+      let raw = el.value.trim();
+      if (raw === "") {
+        // Empty required for core fields amount/rate/term should mark invalid
+        if (["amount", "rate", "term"].includes(field)) {
+          invalid.push(el.id);
+          el.classList.add("is-invalid");
+        }
+        return;
+      }
+      // Normalize commas
+      raw = raw.replace(/,/g, "");
+      const val = parseFloat(raw);
+      const isNaNVal = isNaN(val);
+      const negative = val < 0;
+      // Basic domain checks
+      let outOfRange = false;
+      if (field === "rate" && val > 40) outOfRange = true; // unrealistic rate safeguard
+      if (field === "term" && (val <= 0 || val > 50)) outOfRange = true; // term bounds
+
+      if (isNaNVal || negative || outOfRange) {
+        invalid.push(el.id);
+        el.classList.add("is-invalid");
+      } else {
+        // Optionally format back for core numeric integer fields (term)
+        if (field === "term") {
+          el.value = parseInt(val, 10);
+        }
+      }
+    });
+  });
+
+  // Provide inline feedback elements if not present
+  invalid.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      let feedback = el.parentElement.querySelector(
+        ".invalid-feedback.validation-inline"
+      );
+      if (!feedback) {
+        feedback = document.createElement("div");
+        feedback.className = "invalid-feedback validation-inline";
+        feedback.textContent = "Enter a valid non-negative value.";
+        el.parentElement.appendChild(feedback);
+      }
+    }
+  });
+
+  return invalid;
+}
+
+const {
+  buildFixedLoanSchedule,
+} = require("./modules/calculators/ScheduleBuilder");
+// Scoring abstraction (Task 20)
+const {
+  determineBestLoan: scoreBestLoan,
+  EvaluationModes,
+} = require("./modules/calculators/ScoringEngine");
 
 function calculateSingleLoan(loanData) {
-  const {
-    amount,
-    rate,
-    term,
-    pmi,
-    propertyTax,
-    homeInsurance,
-    extra,
-    appraisedValue,
-  } = loanData;
+  // Delegate to shared schedule builder abstraction (Task 19)
+  return buildFixedLoanSchedule(loanData);
+}
 
-  // Calculate monthly interest rate and number of payments
-  const monthlyRate = rate / 100 / 12;
-  const numberOfPayments = term * 12;
-
-  // Calculate monthly principal and interest payment
-  const monthlyPI =
-    (amount * (monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments))) /
-    (Math.pow(1 + monthlyRate, numberOfPayments) - 1);
-
-  // Calculate monthly property tax (now entered as monthly dollar amount)
-  const monthlyPropertyTax = propertyTax;
-
-  // Total monthly payment including PMI, property tax, and home insurance
-  const totalMonthlyPayment =
-    monthlyPI + pmi + monthlyPropertyTax + homeInsurance;
-
-  // Calculate total interest over life of loan (without extra payments initially)
-  const totalInterestBase = monthlyPI * numberOfPayments - amount;
-
-  // Calculate payoff time with extra payments
+// Lightweight amortization schedule builder (Task 14)
+// Returns a condensed schedule: first 12 months, then annual snapshots (24,36,...) and final payoff month if not already included.
+// Columns: month, paymentPIExtra, interest, principal, pmi, balance, cumInterest. Extra payment included in principal column.
+function buildLightweightSchedule(calc) {
+  if (!calc) return [];
+  const amount = calc.amount;
+  const termMonths = calc.term * 12;
+  const rate = calc.rate / 100 / 12;
+  const extra = calc.extra || 0;
+  const pmiMonthly = calc.monthlyPMIInput || 0; // raw input
+  const thresholdLTV = calc.calculations?.pmiThresholdLTV;
+  const appraisedValue = calc.appraisedValue || 0;
   let balance = amount;
-  let totalInterest = 0;
-  let month = 0;
-  const maxMonths = numberOfPayments;
-
-  if (extra > 0) {
-    // Recalculate with extra payments
-    while (balance > 0.01 && month < maxMonths) {
-      const interestPayment = balance * monthlyRate;
-      const principalPayment = monthlyPI - interestPayment;
-      const totalPrincipal = principalPayment + extra;
-
-      if (totalPrincipal >= balance) {
-        totalInterest += balance * monthlyRate;
-        balance = 0;
+  const monthlyPI = calc.monthlyPI;
+  const rows = [];
+  let cumInterest = 0;
+  let pmiActive =
+    pmiMonthly > 0 &&
+    appraisedValue > 0 &&
+    amount / appraisedValue > thresholdLTV;
+  let pmiEndedAlready = false;
+  for (let m = 1; m <= termMonths && balance > 0.01; m++) {
+    const interest = rate === 0 ? 0 : balance * rate;
+    let principal = rate === 0 ? monthlyPI : monthlyPI - interest;
+    let pmiCharge = 0;
+    if (pmiActive) {
+      const currentLTV = balance / appraisedValue;
+      if (currentLTV > thresholdLTV) {
+        pmiCharge = pmiMonthly;
       } else {
-        totalInterest += interestPayment;
-        balance -= totalPrincipal;
+        pmiActive = false;
+        pmiEndedAlready = true; // PMI ceases starting this month
       }
-      month++;
     }
-  } else {
-    totalInterest = totalInterestBase;
-    month = numberOfPayments;
+    let principalReduction = principal + extra;
+    if (principalReduction > balance) {
+      principalReduction = balance;
+    }
+    cumInterest += interest;
+    balance -= principalReduction;
+    const paymentPIExtra = principal + interest + extra; // exclude PMI for clarity; PMI shown separately
+    const include = m <= 12 || m % 12 === 0 || balance <= 0.01; // first year monthly + annual snapshots + final
+    if (include) {
+      rows.push({
+        month: m,
+        payment: paymentPIExtra,
+        interest: interest,
+        principal: principalReduction,
+        pmi: pmiCharge,
+        balance: Math.max(0, balance),
+        cumInterest: cumInterest,
+        pmiEnds: pmiEndedAlready && pmiCharge === 0 && !pmiActive, // marker when first month without PMI after being active
+      });
+    }
+    if (balance <= 0.01) break;
   }
-
-  const payoffYears = Math.floor(month / 12);
-  const payoffMonths = month % 12;
-
-  return {
-    ...loanData,
-    monthlyPI: monthlyPI,
-    monthlyPropertyTax: monthlyPropertyTax,
-    totalMonthlyPayment: totalMonthlyPayment,
-    totalInterest: totalInterest,
-    totalCost: amount + totalInterest,
-    payoffTime: {
-      years: payoffYears,
-      months: payoffMonths,
-      totalMonths: month,
-    },
-    calculations: {
-      monthlyRate,
-      numberOfPayments,
-      originalTerm: numberOfPayments,
-    },
-  };
+  // Ensure last row (payoff) included even if not captured by condition
+  const last = rows[rows.length - 1];
+  if (!last || last.balance > 0.01) {
+    rows.push({
+      month: calc.payoffTime?.totalMonths || rows.length,
+      payment: 0,
+      interest: 0,
+      principal: 0,
+      pmi: 0,
+      balance: 0,
+      cumInterest: cumInterest,
+      pmiEnds: false,
+    });
+  }
+  return rows;
 }
 
-function determineBestLoan(calculations, validLoans) {
-  const validCalculations = Object.values(calculations).filter(
-    (calc) => calc !== null
+function determineBestLoan(calculations) {
+  const validCalculations = Object.values(calculations).filter(Boolean);
+  if (!validCalculations.length) return null;
+  // Evaluation mode selection (persisted in localStorage by existing listener)
+  let mode = EvaluationModes.TOTAL_OUT_OF_POCKET;
+  const selected = document.querySelector(
+    'input[name="evaluationMode"]:checked'
   );
-
-  if (validCalculations.length === 0) return null;
-
-  // Find best loan based on total cost (including fees)
-  let bestLoan = validCalculations[0];
-
-  for (const loan of validCalculations) {
-    if (loan.totalCost < bestLoan.totalCost) {
-      bestLoan = loan;
-    }
+  if (
+    selected &&
+    selected.value &&
+    Object.values(EvaluationModes).includes(selected.value)
+  ) {
+    mode = selected.value;
   }
-
-  return bestLoan;
+  const best = scoreBestLoan(validCalculations, mode);
+  return best;
 }
+
+// Event listener to re-evaluate best loan when evaluation mode changes (without forcing user to re-enter inputs)
+document.addEventListener("DOMContentLoaded", () => {
+  const modeInputs = document.querySelectorAll('input[name="evaluationMode"]');
+  // Restore persisted selection
+  try {
+    const storedMode = localStorage.getItem("mp_eval_mode");
+    if (storedMode) {
+      const toCheck = document.querySelector(
+        `input[name="evaluationMode"][value="${storedMode}"]`
+      );
+      if (toCheck) toCheck.checked = true;
+    }
+  } catch (e) {
+    console.warn("Eval mode restore failed", e);
+  }
+  modeInputs.forEach((inp) => {
+    inp.addEventListener("change", () => {
+      // Persist selection
+      try {
+        localStorage.setItem("mp_eval_mode", inp.value);
+      } catch (_) {}
+      if (comparisonData && comparisonData.calculations) {
+        const bestOption = determineBestLoan(comparisonData.calculations);
+        comparisonData.bestOption = bestOption;
+        const savings = calculateSavings(
+          comparisonData.calculations,
+          bestOption
+        );
+        updateComparisonResults(
+          comparisonData.calculations,
+          bestOption,
+          savings
+        );
+      }
+    });
+  });
+});
 
 function calculateSavings(calculations, bestOption) {
   if (!bestOption) return null;
@@ -1840,12 +1951,60 @@ function calculateSavings(calculations, bestOption) {
 
   if (!secondBest) return null;
 
+  const bestOut = bestOption.totals?.totalOutOfPocket ?? Infinity;
+  const secondOut = secondBest.totals?.totalOutOfPocket ?? Infinity;
+
+  // --- Blended monthly payment savings (Priority 2 Task 8) ---
+  // Rationale:
+  // The previous implementation compared only the initial monthly payment (which could include PMI)
+  // leading to distorted "monthly savings" when one loan's PMI drops earlier. We now compute an
+  // average monthly out-of-pocket (principal+interest+escrows incl. PMI while it applies) over the
+  // life of each loan's payoff horizon (shorter horizon if earlier payoff). For a loan object we have:
+  //   totalOutOfPocket = principal + interest + totalPMI + tax + insurance
+  //   pmiPaid          = totals.pmiPaid (sum of PMI actually charged)
+  //   We also have initial payment (may include PMI) and baseMonthlyPaymentNoPMI.
+  // We approximate a blended average instead of recreating the full schedule here by weighting:
+  //   blended = ( (initialMonthlyPayment * monthsWithPMI) + (baseMonthlyPaymentNoPMI * (payoffMonths - monthsWithPMI)) ) / payoffMonths
+  // To retrieve monthsWithPMI we infer it from pmiPaid / monthlyPMI (if monthlyPMI>0). monthlyPMI is derived
+  // from the first-month delta between totalMonthlyPayment and baseMonthlyPaymentNoPMI (less taxes/insurance already included).
+  function computeBlendedAverage(loan) {
+    const payoffMonths =
+      loan.payoff?.totalMonths || loan.scheduleMeta?.payoffMonth || 0;
+    if (!payoffMonths) return loan.totalMonthlyPayment || 0; // fallback
+    const monthlyPMI = (() => {
+      const delta =
+        (loan.totalMonthlyPayment || 0) - (loan.baseMonthlyPaymentNoPMI || 0);
+      return delta > 0 ? delta : 0;
+    })();
+    const totalPmiPaid = loan.totals?.pmiPaid || 0;
+    let monthsWithPMI = 0;
+    if (monthlyPMI > 0) {
+      monthsWithPMI = Math.round(totalPmiPaid / monthlyPMI);
+      // Guard: don't exceed payoff horizon
+      monthsWithPMI = Math.min(monthsWithPMI, payoffMonths);
+    }
+    const baseNoPMI =
+      loan.baseMonthlyPaymentNoPMI || loan.totalMonthlyPayment || 0;
+    const initialWithPMI = loan.totalMonthlyPayment || baseNoPMI;
+    const monthsWithout = Math.max(0, payoffMonths - monthsWithPMI);
+    const blended =
+      (initialWithPMI * monthsWithPMI + baseNoPMI * monthsWithout) /
+      (payoffMonths || 1);
+    return blended;
+  }
+
+  const bestBlended = computeBlendedAverage(bestOption);
+  const secondBlended = computeBlendedAverage(secondBest);
+
   return {
-    monthlyPaymentSavings:
-      secondBest.totalMonthlyPayment - bestOption.totalMonthlyPayment,
+    // Positive value means second best costs more per month on a blended basis
+    monthlyPaymentSavings: secondBlended - bestBlended,
     totalInterestSavings: secondBest.totalInterest - bestOption.totalInterest,
-    totalCostSavings: secondBest.totalCost - bestOption.totalCost,
+    totalCostSavings: secondBest.totalCost - bestOption.totalCost, // legacy PI delta
+    totalOutOfPocketSavings: secondOut - bestOut,
     comparedTo: secondBest.name,
+    blendedMonthlyBest: bestBlended,
+    blendedMonthlySecond: secondBlended,
   };
 }
 
@@ -1859,6 +2018,49 @@ function updateComparisonResults(calculations, bestOption, savings) {
     }).format(value);
   };
 
+  // --- Task 18: Build contextual warnings (PMI persistence, missing appraisal, ambiguous PMI) ---
+  const buildComparisonWarnings = () => {
+    const warnings = [];
+    ["A", "B", "C"].forEach((letter) => {
+      const calc = calculations[letter];
+      if (!calc) return;
+      const name = calc.name || `Option ${letter}`;
+      const pmiEnds = calc.pmiMeta?.pmiEndsMonth; // null => Never, 1 => No PMI, >1 => drops after
+      const startingLTV = calc.calculations?.startingLTV;
+      const hasAppraised = typeof startingLTV === "number" && startingLTV > 0;
+      const monthlyPMIInput = calc.pmiMeta?.pmiMonthlyInput || 0;
+      // 1. PMI persists full term
+      if (monthlyPMIInput > 0 && pmiEnds == null) {
+        warnings.push(
+          `${name}: PMI never drops (consider larger down payment or new appraisal).`
+        );
+      }
+      // 2. Appraised value missing while PMI provided
+      if (monthlyPMIInput > 0 && !hasAppraised) {
+        warnings.push(
+          `${name}: Appraised value missing — cannot evaluate PMI termination; treated as persistent.`
+        );
+      }
+      // 3. PMI entered but starting LTV already below threshold (pmiEndsMonth === 1)
+      if (monthlyPMIInput > 0 && pmiEnds === 1) {
+        warnings.push(
+          `${name}: PMI provided but starting LTV below threshold; charge ignored.`
+        );
+      }
+      // 4. Extra payment present but zero interest saved (could be due to rounding or payoff already minimal)
+      if (
+        calc.extraPayment > 0 &&
+        calc.extraDeltas &&
+        calc.extraDeltas.interestSaved <= 0
+      ) {
+        warnings.push(
+          `${name}: Extra payment yields no measurable interest savings (likely too small or loan nearly paid off).`
+        );
+      }
+    });
+    return warnings;
+  };
+
   // Update headers
   ["A", "B", "C"].forEach((letter) => {
     const calc = calculations[letter];
@@ -1868,7 +2070,8 @@ function updateComparisonResults(calculations, bestOption, savings) {
         header.textContent = calc.name;
         header.className = "text-center";
         if (bestOption && calc.letter === bestOption.letter) {
-          header.innerHTML = `${calc.name} <span class="badge bg-success ms-1">🏆 Best</span>`;
+          const reason = "Lowest total out-of-pocket";
+          header.innerHTML = `${calc.name} <span class="badge bg-success ms-1" title="${reason}">🏆 Best</span>`;
         }
       } else {
         header.textContent = `Option ${letter}`;
@@ -1882,37 +2085,190 @@ function updateComparisonResults(calculations, bestOption, savings) {
     const calc = calculations[letter];
     const monthly = document.getElementById(`comp${letter}_monthly`);
     const interest = document.getElementById(`comp${letter}_interest`);
-    const total = document.getElementById(`comp${letter}_total`);
+    const totalPI = document.getElementById(`comp${letter}_totalPI`);
     const payoff = document.getElementById(`comp${letter}_payoff`);
-    const fees = document.getElementById(`comp${letter}_fees`);
+    // New escrow/out-of-pocket fields
+    const pmiCell = document.getElementById(`comp${letter}_pmi`);
+    const taxCell = document.getElementById(`comp${letter}_tax`);
+    const insCell = document.getElementById(`comp${letter}_insurance`);
+    const outCell = document.getElementById(`comp${letter}_out`);
+    const pmiEndsCell = document.getElementById(`comp${letter}_pmiEnds`);
+    const extraInterestCell = document.getElementById(
+      `comp${letter}_extraInterestSaved`
+    );
+    const extraMonthsCell = document.getElementById(
+      `comp${letter}_extraMonthsSaved`
+    );
 
     if (calc) {
       const isBest = bestOption && calc.letter === bestOption.letter;
       const cellClass = isBest
         ? "text-center fw-bold text-success"
         : "text-center";
-
-      monthly.innerHTML = `<span class="${cellClass}">${formatCurrency(
-        calc.totalMonthlyPayment
-      )}</span>`;
+      // Build breakdown tooltip for initial month (includes PMI only if charged initially)
+      const breakdownParts = [];
+      // Principal + Interest
+      if (typeof calc.monthlyPI === "number") {
+        breakdownParts.push(
+          `Principal & Interest: ${formatCurrency(calc.monthlyPI)}`
+        );
+      }
+      // PMI if initial month charged (pmiEndsMonth !== 1 and pmiMonthlyInput > 0 and starting LTV above threshold)
+      const initialPMIActive =
+        calc.pmiMeta &&
+        calc.pmiMeta.pmiEndsMonth !== 1 &&
+        typeof calc.pmiMeta.pmiMonthlyInput === "number" &&
+        calc.pmiMeta.pmiMonthlyInput > 0 &&
+        (calc.pmiMeta.pmiEndsMonth === null || calc.pmiMeta.pmiEndsMonth > 1);
+      if (initialPMIActive) {
+        breakdownParts.push(
+          `PMI (initial): ${formatCurrency(calc.pmiMeta.pmiMonthlyInput)}`
+        );
+      }
+      if (
+        typeof calc.monthlyPropertyTax === "number" &&
+        calc.monthlyPropertyTax > 0
+      ) {
+        breakdownParts.push(
+          `Property Tax: ${formatCurrency(calc.monthlyPropertyTax)}`
+        );
+      }
+      if (
+        typeof calc.monthlyInsurance === "number" &&
+        calc.monthlyInsurance > 0
+      ) {
+        breakdownParts.push(
+          `Insurance: ${formatCurrency(calc.monthlyInsurance)}`
+        );
+      }
+      if (typeof calc.extraPayment === "number" && calc.extraPayment > 0) {
+        breakdownParts.push(
+          `Extra Principal: ${formatCurrency(calc.extraPayment)}`
+        );
+      }
+      const breakdownTooltip =
+        breakdownParts.join(" | ") || "Monthly payment components unavailable";
+      monthly.innerHTML = `<span class="${cellClass}" data-bs-toggle="tooltip" data-bs-placement="top" title="${breakdownTooltip.replace(
+        /"/g,
+        "&quot;"
+      )}">${formatCurrency(calc.totalMonthlyPayment)}</span>`;
       interest.innerHTML = `<span class="${cellClass}">${formatCurrency(
         calc.totalInterest
       )}</span>`;
-      total.innerHTML = `<span class="${cellClass}">${formatCurrency(
-        calc.totalCost
-      )}</span>`;
+      if (totalPI) {
+        totalPI.innerHTML = `<span class="${cellClass}">${formatCurrency(
+          calc.totals?.totalCostPI || calc.totalCost
+        )}</span>`;
+      }
       payoff.innerHTML = `<span class="${cellClass}">${calc.payoffTime.years}y ${calc.payoffTime.months}m</span>`;
-      fees.innerHTML = `<span class="${cellClass}">${formatCurrency(
-        calc.fees
-      )}</span>`;
+      if (pmiCell && taxCell && insCell && outCell) {
+        pmiCell.innerHTML = `<span class="${cellClass}">${formatCurrency(
+          calc.totals?.pmiPaid || 0
+        )}</span>`;
+        taxCell.innerHTML = `<span class="${cellClass}">${formatCurrency(
+          calc.totals?.taxPaid || 0
+        )}</span>`;
+        insCell.innerHTML = `<span class="${cellClass}">${formatCurrency(
+          calc.totals?.insurancePaid || 0
+        )}</span>`;
+        outCell.innerHTML = `<span class="${cellClass}">${formatCurrency(
+          calc.totals?.totalOutOfPocket || 0
+        )}</span>`;
+      }
+      // PMI Ends formatting: null => Never (ran full term), 1 => No PMI, else show Month X plus (Yy Mm)
+      if (pmiEndsCell) {
+        let display = "-";
+        const endMonth = calc.pmiEndsMonth; // 1-based first month WITHOUT PMI
+        if (endMonth === 1) {
+          display = "No PMI"; // Started below threshold
+        } else if (endMonth == null) {
+          display = "Never"; // Paid entire term
+        } else if (typeof endMonth === "number" && endMonth > 1) {
+          const lastWithPMIMonth = endMonth - 1; // inclusive month index PMI last applied
+          const y = Math.floor(lastWithPMIMonth / 12);
+          const m = lastWithPMIMonth % 12;
+          const duration = `${y > 0 ? y + "y " : ""}${m}m`;
+          display = `Drops after: ${duration} (Month ${endMonth})`;
+        }
+        pmiEndsCell.innerHTML = `<span class=\"${cellClass}\">${display}</span>`;
+      }
+
+      // Extra payment metrics
+      if (extraInterestCell && extraMonthsCell) {
+        if (
+          calc.extraDeltas &&
+          typeof calc.extraDeltas.interestSaved === "number"
+        ) {
+          const interestSaved = calc.extraDeltas.interestSaved;
+          extraInterestCell.innerHTML = `<span class=\"${cellClass}\">${formatCurrency(
+            interestSaved
+          )}</span>`;
+          const monthsSaved = calc.extraDeltas.monthsSaved;
+          if (monthsSaved && monthsSaved > 0) {
+            const y = Math.floor(monthsSaved / 12);
+            const m = monthsSaved % 12;
+            const duration = `${y > 0 ? y + "y " : ""}${m}m`;
+            extraMonthsCell.innerHTML = `<span class=\"${cellClass}\">${duration}</span>`;
+          } else {
+            extraMonthsCell.innerHTML = `<span class=\"${cellClass}\">0m</span>`;
+          }
+        } else {
+          extraInterestCell.innerHTML = '<span class="text-muted">—</span>';
+          extraMonthsCell.innerHTML = '<span class="text-muted">—</span>';
+        }
+      }
     } else {
       monthly.innerHTML = '<span class="text-muted">-</span>';
       interest.innerHTML = '<span class="text-muted">-</span>';
-      total.innerHTML = '<span class="text-muted">-</span>';
+      if (totalPI) totalPI.innerHTML = '<span class="text-muted">-</span>';
       payoff.innerHTML = '<span class="text-muted">-</span>';
-      fees.innerHTML = '<span class="text-muted">-</span>';
+      if (pmiCell) pmiCell.innerHTML = '<span class="text-muted">-</span>';
+      if (taxCell) taxCell.innerHTML = '<span class="text-muted">-</span>';
+      if (insCell) insCell.innerHTML = '<span class="text-muted">-</span>';
+      if (outCell) outCell.innerHTML = '<span class="text-muted">-</span>';
+      const pmiEndsCell = document.getElementById(`comp${letter}_pmiEnds`);
+      if (pmiEndsCell)
+        pmiEndsCell.innerHTML = '<span class="text-muted">-</span>';
+      const extraInterestCell = document.getElementById(
+        `comp${letter}_extraInterestSaved`
+      );
+      const extraMonthsCell = document.getElementById(
+        `comp${letter}_extraMonthsSaved`
+      );
+      if (extraInterestCell)
+        extraInterestCell.innerHTML = '<span class="text-muted">-</span>';
+      if (extraMonthsCell)
+        extraMonthsCell.innerHTML = '<span class="text-muted">-</span>';
     }
   });
+
+  // Re-initialize tooltips within comparison results (Task 16)
+  try {
+    if (window.bootstrap && typeof window.bootstrap.Tooltip === "function") {
+      const comparisonScope = document.getElementById("comparisonResults");
+      if (comparisonScope) {
+        const tooltipTriggerList = [].slice.call(
+          comparisonScope.querySelectorAll('[data-bs-toggle="tooltip"]')
+        );
+        tooltipTriggerList.forEach((el) => {
+          // Dispose existing instance if any to avoid duplicates
+          if (el._tooltipInstance) {
+            try {
+              el._tooltipInstance.dispose();
+            } catch (e) {}
+          }
+          try {
+            const instance = new window.bootstrap.Tooltip(el);
+            el._tooltipInstance = instance;
+          } catch (e) {
+            // silent
+          }
+        });
+      }
+    }
+  } catch (e) {
+    // fail silently; tooltip enhancement is non-critical
+  }
 
   // Update winner banner
   const winnerBanner = document.getElementById("comparisonWinner");
@@ -1921,9 +2277,39 @@ function updateComparisonResults(calculations, bestOption, savings) {
 
   if (bestOption && winnerBanner && winnerName && winnerReason) {
     winnerName.textContent = bestOption.name;
-    winnerReason.textContent = `Lowest total cost: ${formatCurrency(
-      bestOption.totalCost
-    )} | Monthly payment: ${formatCurrency(bestOption.totalMonthlyPayment)}`;
+
+    // Determine evaluation basis (future-proof for mode selector)
+    const scoreBasis = bestOption.evaluation?.scoreBasis || "totalOutOfPocket";
+    const totalOut = bestOption.totals?.totalOutOfPocket;
+    const totalPI = bestOption.totals?.totalCostPI || bestOption.totalCost;
+    const payoffMonths =
+      bestOption.payoffTime?.years !== undefined
+        ? `${bestOption.payoffTime.years}y ${bestOption.payoffTime.months}m`
+        : "";
+
+    let reasonLabel = "";
+    let valuePart = "";
+    switch (scoreBasis) {
+      case "principalInterest":
+        reasonLabel = "Lowest principal + interest";
+        valuePart = formatCurrency(totalPI);
+        break;
+      case "payoffSpeed":
+        reasonLabel = "Fastest payoff";
+        valuePart = payoffMonths;
+        break;
+      case "totalOutOfPocket":
+      default:
+        reasonLabel = "Lowest total out-of-pocket";
+        valuePart = formatCurrency(totalOut ?? totalPI);
+        break;
+    }
+
+    // Always append monthly payment info (uses initial monthly including any PMI)
+    const monthlyPart = `Monthly payment: ${formatCurrency(
+      bestOption.totalMonthlyPayment
+    )}`;
+    winnerReason.textContent = `${reasonLabel}: ${valuePart} | ${monthlyPart}`;
     winnerBanner.style.display = "block";
   }
 
@@ -1941,6 +2327,22 @@ function updateComparisonResults(calculations, bestOption, savings) {
   } else {
     if (monthlySavings) monthlySavings.textContent = "$0";
     if (lifetimeSavings) lifetimeSavings.textContent = "$0";
+  }
+
+  // Inject warnings UI
+  const warningsContainer = document.getElementById("comparisonWarnings");
+  const warningsList = document.getElementById("comparisonWarningsList");
+  if (warningsContainer && warningsList) {
+    const warnings = buildComparisonWarnings();
+    if (warnings.length > 0) {
+      warningsList.innerHTML = warnings
+        .map((w) => `<li>${w.replace(/</g, "&lt;")}</li>`) // escape < minimal
+        .join("");
+      warningsContainer.style.display = "block";
+    } else {
+      warningsContainer.style.display = "none";
+      warningsList.innerHTML = "";
+    }
   }
 }
 
@@ -5194,13 +5596,52 @@ async function exportComparisonReport() {
           );
           yPosition += 7;
           doc.text(
-            `Total Cost: ${formatCurrency(
-              comparisonData.bestOption.totalCost
-            )}`,
+            (() => {
+              const mode =
+                comparisonData.bestOption?.evaluation?.scoreBasis ||
+                "totalOutOfPocket";
+              if (mode === "principalInterest") {
+                return `Principal + Interest: ${formatCurrency(
+                  comparisonData.bestOption.totals?.totalCostPI ||
+                    comparisonData.bestOption.totalCost
+                )}`;
+              }
+              if (mode === "payoffSpeed") {
+                return `Payoff Time: ${
+                  comparisonData.bestOption.payoffTime?.years || 0
+                }y ${comparisonData.bestOption.payoffTime?.months || 0}m`;
+              }
+              return `Total Out-of-Pocket: ${formatCurrency(
+                comparisonData.bestOption.totals?.totalOutOfPocket ||
+                  comparisonData.bestOption.totalCost
+              )}`;
+            })(),
             14,
             yPosition
           );
           yPosition += 7;
+
+          // Show evaluation mode context line
+          const modeLabelMap = {
+            totalOutOfPocket:
+              "Mode: Total Out-of-Pocket (lifetime all-in cost)",
+            principalInterest: "Mode: Principal + Interest (escrow ignored)",
+            payoffSpeed:
+              "Mode: Payoff Speed (months to payoff; tie-breaker = total out-of-pocket)",
+          };
+          const mode =
+            comparisonData.bestOption?.evaluation?.scoreBasis ||
+            "totalOutOfPocket";
+          doc.setFontSize(9);
+          doc.setTextColor(90);
+          doc.text(
+            modeLabelMap[mode] || modeLabelMap.totalOutOfPocket,
+            14,
+            yPosition
+          );
+          yPosition += 6;
+          doc.setFontSize(11);
+          doc.setTextColor(0);
 
           if (comparisonData.savings) {
             doc.text(
@@ -5277,6 +5718,83 @@ async function exportComparisonReport() {
         });
 
         yPosition += 10;
+
+        // Lightweight amortization snapshot (Task 14)
+        try {
+          const snapshot = buildLightweightSchedule(calc);
+          if (snapshot && snapshot.length) {
+            if (yPosition > 230) {
+              doc.addPage();
+              yPosition = 20;
+            }
+            doc.setFontSize(11);
+            doc.setFont(undefined, "bold");
+            doc.setTextColor(44, 62, 80);
+            doc.text("Amortization Snapshot", 14, yPosition);
+            yPosition += 6;
+            doc.setFontSize(8);
+            doc.setFont(undefined, "bold");
+            const headers = [
+              "Mo",
+              "Payment",
+              "Interest",
+              "Principal",
+              "PMI",
+              "Balance",
+              "Cum Int",
+            ]; // concise
+            let x = 14;
+            headers.forEach((h) => {
+              doc.text(h, x, yPosition);
+              x += 23;
+            });
+            yPosition += 4;
+            doc.setFont(undefined, "normal");
+            snapshot.forEach((row) => {
+              if (yPosition > 280) {
+                doc.addPage();
+                yPosition = 20;
+              }
+              let colX = 14;
+              const fmt = (v) => {
+                if (typeof v !== "number") return v;
+                return v.toLocaleString("en-US", {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                });
+              };
+              const cells = [
+                row.month + (row.pmiEnds ? "*" : ""),
+                fmt(row.payment),
+                fmt(row.interest),
+                fmt(row.principal),
+                row.pmi > 0 ? fmt(row.pmi) : "-",
+                fmt(row.balance),
+                fmt(row.cumInterest),
+              ];
+              cells.forEach((c) => {
+                doc.text(String(c), colX, yPosition);
+                colX += 23;
+              });
+              yPosition += 4;
+            });
+            // PMI footnote if any marker
+            if (snapshot.some((r) => r.pmiEnds)) {
+              if (yPosition > 285) {
+                doc.addPage();
+                yPosition = 20;
+              }
+              doc.setFontSize(7);
+              doc.setTextColor(100);
+              doc.text("* First month after PMI ended", 14, yPosition);
+              yPosition += 5;
+              doc.setFontSize(10);
+              doc.setTextColor(0);
+            }
+          }
+        } catch (scheduleErr) {
+          console.warn("Snapshot generation failed", scheduleErr);
+        }
       });
     }
 

@@ -622,6 +622,57 @@ canvas {
   border: none;
   cursor: pointer;
 }
+/* Info Badge (tooltips) */
+
+.info-badge-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  line-height: 14px;
+  text-align: center;
+  cursor: help;
+  user-select: none;
+  transition: background var(--transition-fast), color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.info-badge-inline:hover,
+.info-badge-inline:focus {
+  background: var(--primary-color);
+  color: #fff;
+  border-color: var(--primary-color);
+}
+
+/* Dark mode: force lighter border & initial color for visibility */
+[data-theme="dark"] .info-badge-inline {
+  color: #0f172a;
+  background: #60a5fa;
+  border-color: #60a5fa;
+}
+[data-theme="dark"] .info-badge-inline:hover,
+[data-theme="dark"] .info-badge-inline:focus {
+  background: #7fb8ff;
+  color: #082032;
+  border-color: #7fb8ff;
+}
+
+/* Custom tooltip styling hook if used */
+.mp-tooltip.tooltip .tooltip-inner {
+  background: #0d2733;
+  color: #e9f9ff;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+.mp-tooltip.bs-tooltip-top .tooltip-arrow::before {
+  border-top-color: #0d2733;
+}
 
 .btn:hover {
   transform: translateY(-1px);

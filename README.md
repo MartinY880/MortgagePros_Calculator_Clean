@@ -190,6 +190,12 @@ This is a pre-built portable application. To modify or rebuild:
 - Chart.js required for visualization features
 - All dependencies are bundled in node_modules for portability
 
+### Internal Architecture (v16.2.1 Enhancement)
+
+- Core amortization, PMI gating, extra payment acceleration, and baseline interest savings logic are unified in `ScheduleBuilder` (modules/calculators/ScheduleBuilder.js).
+- Purchase & Refinance tabs now delegate to this shared engine (see `calculateMortgage`), ensuring consistency with comparison scoring logic.
+- Engine output is persisted on each tab as `tabData.builderResult` for future export/report extensions.
+
 ---
 
 <div align="center">

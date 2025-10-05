@@ -812,7 +812,53 @@ class ReportExporter {
           window.NumberFormatter.formatCurrency(loan.results?.totalPaid || 0)
         ),
       ],
+      [
+        "PMI Ends",
+        loans.map((loan) => {
+          const endMonth =
+            loan.results?.pmiEndsMonth ?? loan.pmiEndsMonth ?? null; // 1-based first month WITHOUT PMI
+          if (endMonth === 1) return "No PMI";
+          if (endMonth == null) return "Never"; // unknown or persisted full term
+          if (typeof endMonth === "number" && endMonth > 1) {
+            const lastWithPMIMonth = endMonth - 1; // last PMI month index (1-based)
+            const y = Math.floor(lastWithPMIMonth / 12);
+            const m = lastWithPMIMonth % 12;
+            const duration = `${y > 0 ? y + "y " : ""}${m}m`;
+            return `Drops after: ${duration} (Month ${endMonth})`;
+          }
+          return "-";
+        }),
+      ],
     ];
+
+    // Detect if any loan has extra payment benefit metrics
+    const anyExtra = loans.some(
+      (loan) =>
+        loan.results?.extraDeltas &&
+        typeof loan.results.extraDeltas.interestSaved === "number"
+    );
+    if (anyExtra) {
+      comparisonRows.push([
+        "Interest Saved (Extra Payment)",
+        loans.map((loan) => {
+          const val = loan.results?.extraDeltas?.interestSaved;
+          return typeof val === "number"
+            ? window.NumberFormatter.formatCurrency(val)
+            : "—";
+        }),
+      ]);
+      comparisonRows.push([
+        "Payoff Accelerated",
+        loans.map((loan) => {
+          const months = loan.results?.extraDeltas?.monthsSaved;
+          if (!months || months <= 0)
+            return typeof months === "number" ? "0m" : "—";
+          const y = Math.floor(months / 12);
+          const m = months % 12;
+          return `${y > 0 ? y + "y " : ""}${m}m`;
+        }),
+      ]);
+    }
 
     comparisonRows.forEach(([label, values]) => {
       doc.text(label, 15, yPos);

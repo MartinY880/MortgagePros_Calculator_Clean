@@ -262,16 +262,22 @@
                           <input type="text" inputmode="numeric" id="loanA_term" class="form-control" value="0">
                         </div>
                         <div class="form-group mb-3">
-                          <div class="d-flex justify-content-between align-items-center mb-2">
-                            <label for="loanA_pmi" id="loanA_pmiLabel">PMI Monthly Amount ($):</label>
-                            <div class="form-check form-switch">
-                              <input class="form-check-input" type="checkbox" id="loanA_pmiToggle">
-                              <label class="form-check-label" for="loanA_pmiToggle" id="loanA_pmiToggleLabel">
-                                Monthly
-                              </label>
+                          <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label for="loanA_pmi" id="loanA_pmiLabel">PMI Amount ($):</label>
+                            <div class="form-check form-switch" title="Input Mode: OFF = Monthly figure entered below. ON = Annual figure (we'll divide by 12).">
+                              <input class="form-check-input" type="checkbox" id="loanA_pmiToggle" aria-describedby="loanA_pmiHelp">
+                              <label class="form-check-label" for="loanA_pmiToggle" id="loanA_pmiToggleLabel">Annual Mode</label>
                             </div>
                           </div>
                           <input type="text" inputmode="decimal" id="loanA_pmi" class="form-control" value="0" placeholder="e.g., 125">
+                          <small id="loanA_pmiHelp" class="form-text text-muted">Enter PMI. Toggle “Annual Mode” ON only if this number is a yearly total; we automatically divide by 12. Leave OFF to treat value as already monthly.</small>
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanA_pmiEndRule">PMI Ends at:</label>
+                          <select id="loanA_pmiEndRule" class="form-select">
+                            <option value="80" selected>80% LTV</option>
+                            <option value="78">78% LTV</option>
+                          </select>
                         </div>
                         <div class="form-group mb-3">
                           <label for="loanA_propertyTax">Property Tax (Monthly $):</label>
@@ -317,16 +323,22 @@
                           <input type="text" inputmode="numeric" id="loanB_term" class="form-control" value="0">
                         </div>
                         <div class="form-group mb-3">
-                          <div class="d-flex justify-content-between align-items-center mb-2">
-                            <label for="loanB_pmi" id="loanB_pmiLabel">PMI Monthly Amount ($):</label>
-                            <div class="form-check form-switch">
-                              <input class="form-check-input" type="checkbox" id="loanB_pmiToggle">
-                              <label class="form-check-label" for="loanB_pmiToggle" id="loanB_pmiToggleLabel">
-                                Monthly
-                              </label>
+                          <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label for="loanB_pmi" id="loanB_pmiLabel">PMI Amount ($):</label>
+                            <div class="form-check form-switch" title="Input Mode: OFF = Monthly figure entered below. ON = Annual figure (we'll divide by 12).">
+                              <input class="form-check-input" type="checkbox" id="loanB_pmiToggle" aria-describedby="loanB_pmiHelp">
+                              <label class="form-check-label" for="loanB_pmiToggle" id="loanB_pmiToggleLabel">Annual Mode</label>
                             </div>
                           </div>
                           <input type="text" inputmode="decimal" id="loanB_pmi" class="form-control" value="0" placeholder="e.g., 125">
+                          <small id="loanB_pmiHelp" class="form-text text-muted">Enter PMI. Toggle “Annual Mode” ON only if this number is a yearly total; we automatically divide by 12. Leave OFF to treat value as already monthly.</small>
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanB_pmiEndRule">PMI Ends at:</label>
+                          <select id="loanB_pmiEndRule" class="form-select">
+                            <option value="80" selected>80% LTV</option>
+                            <option value="78">78% LTV</option>
+                          </select>
                         </div>
                         <div class="form-group mb-3">
                           <label for="loanB_propertyTax">Property Tax (Monthly $):</label>
@@ -372,16 +384,22 @@
                           <input type="text" inputmode="numeric" id="loanC_term" class="form-control" value="0">
                         </div>
                         <div class="form-group mb-3">
-                          <div class="d-flex justify-content-between align-items-center mb-2">
-                            <label for="loanC_pmi" id="loanC_pmiLabel">PMI Monthly Amount ($):</label>
-                            <div class="form-check form-switch">
-                              <input class="form-check-input" type="checkbox" id="loanC_pmiToggle">
-                              <label class="form-check-label" for="loanC_pmiToggle" id="loanC_pmiToggleLabel">
-                                Monthly
-                              </label>
+                          <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label for="loanC_pmi" id="loanC_pmiLabel">PMI Amount ($):</label>
+                            <div class="form-check form-switch" title="Input Mode: OFF = Monthly figure entered below. ON = Annual figure (we'll divide by 12).">
+                              <input class="form-check-input" type="checkbox" id="loanC_pmiToggle" aria-describedby="loanC_pmiHelp">
+                              <label class="form-check-label" for="loanC_pmiToggle" id="loanC_pmiToggleLabel">Annual Mode</label>
                             </div>
                           </div>
                           <input type="text" inputmode="decimal" id="loanC_pmi" class="form-control" value="0" placeholder="e.g., 125">
+                          <small id="loanC_pmiHelp" class="form-text text-muted">Enter PMI. Toggle “Annual Mode” ON only if this number is a yearly total; we automatically divide by 12. Leave OFF to treat value as already monthly.</small>
+                        </div>
+                        <div class="form-group mb-3">
+                          <label for="loanC_pmiEndRule">PMI Ends at:</label>
+                          <select id="loanC_pmiEndRule" class="form-select">
+                            <option value="80" selected>80% LTV</option>
+                            <option value="78">78% LTV</option>
+                          </select>
                         </div>
                         <div class="form-group mb-3">
                           <label for="loanC_propertyTax">Property Tax (Monthly $):</label>
@@ -837,10 +855,36 @@
               <h6 class="mb-0" style="font-size: 0.9rem;">🏆 Loan Comparison Results</h6>
             </div>
             <div class="card-body">
+              <!-- Evaluation Mode Selector -->
+              <div id="evaluationModeWrapper" class="mb-3">
+                <fieldset class="evaluation-mode-fieldset">
+                  <legend class="visually-hidden">Select evaluation basis</legend>
+                  <div class="d-flex flex-wrap align-items-center gap-3 small">
+                    <span class="fw-semibold">Optimize For:</span>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" name="evaluationMode" id="eval_outOfPocket" value="totalOutOfPocket" checked>
+                      <label class="form-check-label" for="eval_outOfPocket">Total Out-of-Pocket <span class="info-badge-inline" data-bs-toggle="tooltip" title="Lifetime cost: principal + interest + PMI + property tax + insurance.">ℹ</span></label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" name="evaluationMode" id="eval_principalInterest" value="principalInterest">
+                      <label class="form-check-label" for="eval_principalInterest">Principal + Interest <span class="info-badge-inline" data-bs-toggle="tooltip" title="Ignores escrow components; focuses purely on financing cost.">ℹ</span></label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                      <input class="form-check-input" type="radio" name="evaluationMode" id="eval_payoffSpeed" value="payoffSpeed">
+                      <label class="form-check-label" for="eval_payoffSpeed">Payoff Speed <span class="info-badge-inline" data-bs-toggle="tooltip" title="Fewest months to payoff (includes extra payments). Tie-breaker: lowest total out-of-pocket.">ℹ</span></label>
+                    </div>
+                  </div>
+                </fieldset>
+              </div>
               <!-- Winner Banner -->
               <div id="comparisonWinner" class="alert alert-success mb-3" style="display: none;">
                 <strong>🎯 Best Option: </strong><span id="winnerName"></span>
                 <br><small id="winnerReason"></small>
+              </div>
+
+              <!-- Contextual Warnings (PMI / Appraised Value / Terminology) -->
+              <div id="comparisonWarnings" class="alert alert-warning py-2 px-3 mb-3" role="alert" style="display:none; font-size:0.75rem; line-height:1.1;">
+                <ul id="comparisonWarningsList" class="m-0 ps-3"></ul>
               </div>
 
               <!-- Comparison Table -->
@@ -868,10 +912,10 @@
                       <td id="compC_interest" class="text-center">-</td>
                     </tr>
                     <tr>
-                      <td><strong>Total Cost</strong></td>
-                      <td id="compA_total" class="text-center">-</td>
-                      <td id="compB_total" class="text-center">-</td>
-                      <td id="compC_total" class="text-center">-</td>
+                      <td><strong>Total Cost (PI)</strong></td>
+                      <td id="compA_totalPI" class="text-center">-</td>
+                      <td id="compB_totalPI" class="text-center">-</td>
+                      <td id="compC_totalPI" class="text-center">-</td>
                     </tr>
                     <tr>
                       <td><strong>Payoff Time</strong></td>
@@ -880,10 +924,76 @@
                       <td id="compC_payoff" class="text-center">-</td>
                     </tr>
                     <tr>
-                      <td><strong>Closing Costs</strong></td>
-                      <td id="compA_fees" class="text-center">-</td>
-                      <td id="compB_fees" class="text-center">-</td>
-                      <td id="compC_fees" class="text-center">-</td>
+                      <td><strong>PMI Paid</strong></td>
+                      <td id="compA_pmi" class="text-center">-</td>
+                      <td id="compB_pmi" class="text-center">-</td>
+                      <td id="compC_pmi" class="text-center">-</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Property Tax Paid</strong></td>
+                      <td id="compA_tax" class="text-center">-</td>
+                      <td id="compB_tax" class="text-center">-</td>
+                      <td id="compC_tax" class="text-center">-</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Insurance Paid</strong></td>
+                      <td id="compA_insurance" class="text-center">-</td>
+                      <td id="compB_insurance" class="text-center">-</td>
+                      <td id="compC_insurance" class="text-center">-</td>
+                    </tr>
+                    <tr>
+                      <td><strong>PMI Ends</strong>
+                        <span
+                          class="text-info small ms-1"
+                          role="button"
+                          data-bs-toggle="tooltip"
+                          data-bs-placement="top"
+                          title="'No PMI' means loan started below LTV threshold. 'Never' means PMI persisted until payoff. Otherwise shows first month without PMI and elapsed PMI duration."
+                          aria-label="Info: PMI Ends semantics"
+                          style="cursor: help;"
+                        ><span class="info-badge-inline">ℹ</span></span>
+                      </td>
+                      <td id="compA_pmiEnds" class="text-center">-</td>
+                      <td id="compB_pmiEnds" class="text-center">-</td>
+                      <td id="compC_pmiEnds" class="text-center">-</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Interest Saved (Extra Payment)</strong>
+                        <span
+                          class="text-info small ms-1"
+                          role="button"
+                          data-bs-toggle="tooltip"
+                          data-bs-placement="top"
+                          title="Interest avoided versus the same loan with no extra monthly payment. Shows ‘—’ if no extra payment provided."
+                          aria-label="Info: Interest Saved from Extra Payment"
+                          style="cursor: help;"
+                        ><span class="info-badge-inline">ℹ</span></span>
+                      </td>
+                      <td id="compA_extraInterestSaved" class="text-center">-</td>
+                      <td id="compB_extraInterestSaved" class="text-center">-</td>
+                      <td id="compC_extraInterestSaved" class="text-center">-</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Payoff Accelerated</strong>
+                        <span
+                          class="text-info small ms-1"
+                          role="button"
+                          data-bs-toggle="tooltip"
+                          data-bs-placement="top"
+                          title="Time shaved off payoff compared to no extra payment scenario. ‘—’ if no extra payment."
+                          aria-label="Info: Payoff Accelerated explanation"
+                          style="cursor: help;"
+                        ><span class="info-badge-inline">ℹ</span></span>
+                      </td>
+                      <td id="compA_extraMonthsSaved" class="text-center">-</td>
+                      <td id="compB_extraMonthsSaved" class="text-center">-</td>
+                      <td id="compC_extraMonthsSaved" class="text-center">-</td>
+                    </tr>
+                    <tr class="table-success">
+                      <td><strong>Total Out-of-Pocket</strong></td>
+                      <td id="compA_out" class="text-center fw-bold">-</td>
+                      <td id="compB_out" class="text-center fw-bold">-</td>
+                      <td id="compC_out" class="text-center fw-bold">-</td>
                     </tr>
                   </tbody>
                 </table>
@@ -894,13 +1004,37 @@
                 <div class="row">
                   <div class="col-md-6">
                     <div class="savings-item">
-                      <h6>💰 Monthly Savings vs Best Alternative</h6>
+                      <h6 class="d-flex align-items-center gap-1">💰 Monthly Savings vs Best Alternative
+                        <span
+                          class="text-info small"
+                          role="button"
+                          data-bs-toggle="tooltip"
+                          data-bs-placement="top"
+                          title="Blended lifetime average monthly difference. We weight months with PMI at the higher initial payment and months after PMI drops at the lower base payment (tax + insurance + PI)."
+                          aria-label="Info: blended average monthly savings"
+                          style="cursor: help;"
+                        >
+                          <span class="info-badge-inline">ℹ</span>
+                        </span>
+                      </h6>
                       <p id="monthlySavings" class="savings-value">$0</p>
                     </div>
                   </div>
                   <div class="col-md-6">
                     <div class="savings-item">
-                      <h6>🏦 Lifetime Interest Savings</h6>
+                      <h6 class="d-flex align-items-center gap-1">🏦 Lifetime Interest Savings
+                        <span
+                          class="text-info small"
+                          role="button"
+                          data-bs-toggle="tooltip"
+                          data-bs-placement="top"
+                          title="Interest you avoid paying by choosing the selected best loan over the next best alternative (principal+interest portion only; excludes PMI/tax/insurance)."
+                          aria-label="Info: lifetime interest savings explanation"
+                          style="cursor: help;"
+                        >
+                          <span class="info-badge-inline">ℹ</span>
+                        </span>
+                      </h6>
                       <p id="lifetimeSavings" class="savings-value">$0</p>
                     </div>
                   </div>
@@ -1075,6 +1209,17 @@
           console.log('Direct handler attached to:', tabId);
         }
       });
+    });
+  </script>
+
+  <!-- Tooltip Init (for blended monthly savings info icon) -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.bootstrap) {
+        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+          try { new bootstrap.Tooltip(el); } catch(e) { /* ignore */ }
+        });
+      }
     });
   </script>
 
