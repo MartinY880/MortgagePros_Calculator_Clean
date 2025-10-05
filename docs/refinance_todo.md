@@ -1,6 +1,6 @@
 # Refinance Tab — To‑Do Breakdown
 
-Updated: 2025-10-01 (validation finalized, PMI var refactor, PMI rule toggle, schedule PMI column)
+Updated: 2025-10-05 (Unified engine v16.3.0, snapshot regression, fixedMonthlyPMI override, exporter parity)
 
 - [x] Audit refinance calculations
 
@@ -53,11 +53,11 @@ Updated: 2025-10-01 (validation finalized, PMI var refactor, PMI rule toggle, sc
 
 - [ ] Add closing costs & breakeven
 
-  - Optional but valuable: add refinance closing costs/points input and compute breakeven months vs. current loan (needs current loan payment/term inputs or rely on Compare Loans tab).
+  - Optional but valuable: add refinance closing costs/points input and compute breakeven months vs. current loan (needs current loan payment/term inputs or rely on Compare Loans tab). (Deferred – core unification prioritized.)
 
-- [ ] Clarify PMI variable naming
+- [x] Clarify PMI variable naming
 
-  - [x] Rename confusing `pmiRate` variable in refinance branch to `pmiAmountRefi` (or similar) to prevent misuse as a percentage later.
+  - `pmiRate` → `pmiAmountRefi` (monthly dollars) completed; unified engine now prefers percentage-based PMI or `fixedMonthlyPMI` override (see below).
 
 - [x] Recompute totals with PMI drop
 
@@ -105,8 +105,53 @@ Quality/Robustness
 
 ---
 
-What’s next (priority order)
+---
 
-1. Closing costs & breakeven
+## Unified Engine Migration (v16.3.0)
 
-- Add closing costs/points inputs; compute breakeven vs current loan or via comparison module.
+- [x] Replaced legacy refinance schedule generation with `ScheduleBuilder` shared with Purchase.
+- [x] Stored builder output in `refinanceData.builderResult` as single source of truth.
+- [x] Ensured PMI lifecycle, extra payment acceleration, interest/months saved metrics match purchase semantics.
+- [x] Deprecated legacy `generateAmortizationSchedule` (retained only for backward compatibility bannered at top of implementation).
+
+## Fixed Monthly PMI Override
+
+- [x] Added `fixedMonthlyPMI` input path for refinance: applies flat dollar PMI until LTV crosses termination threshold (80% / 78%).
+- [x] Engine records canonical `pmiMeta` (`pmiEndsMonth`, `pmiTotalPaid`) identically to percentage PMI.
+- [x] Tests: `refinanceFixedPMI.test.js` covers drop-on-threshold and non-charged scenarios.
+
+## Snapshot Regression Safety
+
+- [x] Implemented `refinanceSnapshot.test.js` with baseline `refinance.snapshot.json` capturing: `monthlyPI`, `pmiEndsMonth`, `pmiTotalPaid`, `interestSaved`, `monthsSaved`.
+- [x] Purchase & refinance snapshots now provide symmetric guardrails for any future engine modifications.
+
+## Exporter Parity
+
+- [x] PDF & CSV exporters updated to draw PMI lifecycle, `pmiTotalPaid`, `interestSaved`, `monthsSaved`, and extra deltas from unified builder result for refinance.
+- [x] Removed drift between UI metrics and exported report values.
+
+## DOM / Integration Tests
+
+- [x] Refinance core logic covered by pure tests (PMI lifecycle, extra acceleration, financed cost placeholder scenarios).
+- [ ] Optional: add refinance DOM smoke similar to purchase (deferred – low ROI vs pure coverage).
+
+## Remaining / Deferred Backlog
+
+1. Closing costs & breakeven analysis (requires capturing current-loan baseline or integrating Compare module heuristics).
+2. Refined exporter formatting tests (column order & currency formatting assertions).
+3. Optional DOM smoke test for refinance (load, calculate, no-crash, PMI badge presence).
+4. Additional scenario tests: cash-out refinance with immediate no-PMI plus fixedMonthlyPMI override ignored.
+5. Potential UI indicator showing baseline remaining term vs accelerated term (monthsSaved already computed).
+
+## Acceptance Criteria (Current State Achieved)
+
+- Refinance computations use the same amortization & PMI engine as purchase.
+- PMI drop month semantics identical; `pmiEndsMonth=1` means never charged, `>1` first PMI-free month, `null` never drops.
+- Exported metrics exactly reflect schedule engine outputs (no derived duplicate logic).
+- Snapshot test locks canonical reference scenario metrics.
+
+## Deprecation Notice
+
+Legacy refinance logic (old schedule generator) is deprecated. All new features must route through `ScheduleBuilder`. Remove the legacy code in a future major once external dependencies (if any) are confirmed migrated.
+
+---

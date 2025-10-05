@@ -164,13 +164,19 @@ Scope: ONLY the Purchase tab (form `#mortgageForm`). Goal: strengthen correctnes
 
 - [x] Enumerate new validation, PMI visibility, and metrics improvements for release notes (CHANGELOG.md created).
 
-22. Refinance Unification (Next Major Step)
+22. Refinance Unification (Completed in v16.3.0)
 
-- [ ] Migrate refinance path to use `buildFixedLoanSchedule` (replace legacy `generateAmortizationSchedule` for refinance).
-- [ ] Normalize PMI calculation for refinance using unified PMI metadata, aligning with purchase semantics (`pmiMeta`).
-- [ ] Ensure closing costs & cash-out adjustments feed unified builder `amount` consistently (introduce pre-builder principal adjustment layer).
-- [ ] Reconcile refinance-specific outputs (dueAtClosing, financedCosts) with unified totals (document in README & JSDoc).
-- [ ] Add regression tests for a refinance scenario with financed costs, with & without PMI.
+- [x] Migrate refinance path to unified `ScheduleBuilder` (legacy `generateAmortizationSchedule` now deprecated; retained only for backward compatibility bannered in code).
+- [x] Normalize PMI calculation for refinance using canonical `pmiMeta` semantics (shared logic with purchase; identical `pmiEndsMonth` interpretation).
+- [x] Closing costs & cash‑out adjustments routed through pre-builder normalization; final principal fed into builder consistently.
+- [x] Reconcile refinance-specific outputs (financed costs, savings) and surfaced via exporter (PDF + CSV) using `builderResult` metrics.
+- [x] Regression tests: core refinance scenarios (PMI lifecycle, extra payment acceleration, financed costs) plus snapshot (`refinanceSnapshot.test.js`) established.
+- [x] Added `fixedMonthlyPMI` override path (drops at threshold; still yields unified PMI lifecycle metrics).
+
+Remaining (Deferred / Optional):
+
+- [x] Additional refinance DOM smoke coverage (minimal smoke tests added; relaxed assertions to avoid brittleness; future tightening optional).
+- [ ] Extended exporter formatting tests (logic verified indirectly by snapshot + core tests).
 
 ---
 
@@ -179,7 +185,7 @@ Scope: ONLY the Purchase tab (form `#mortgageForm`). Goal: strengthen correctnes
 - Payoff Goal Solver (compute extra needed for target payoff date).
 - Cumulative cost chart (stacked PI / PMI / escrow / HOA).
 - Real-time “What-if” slider (adjust extra; update payoff & savings live pre-calc commit).
-- Down payment preset buttons (5%, 10%, 15%, 20%).
+- Down payment preset buttons (5%, 10%, 15%, 20%). (Implemented)
 - PMI sensitivity: show savings crossing 78% vs 80% rule choice.
 - Locale / currency toggle.
 - Export enhancement: PMI timeline & acceleration summary page.

@@ -1,5 +1,36 @@
 # Changelog
 
+## v16.3.0 (October 2025)
+
+### Added
+
+- Refinance path fully unified onto `ScheduleBuilder` (Task 22) – purchase & refinance now share identical amortization, PMI lifecycle, extra payment, and acceleration logic.
+- `fixedMonthlyPMI` override: allows refinance scenarios to model a flat PMI charge that terminates automatically at threshold (still producing canonical `pmiMeta`).
+- Refinance snapshot regression (`refinanceSnapshot.test.js` + `refinance.snapshot.json`) mirroring purchase snapshot to lock core refinance metrics (monthlyPI, pmiEndsMonth, pmiTotalPaid, monthsSaved, interestSaved, extra deltas).
+- Exporter enhancements (PDF + CSV) now surface unified metrics for refinance: PMI lifecycle (start/end), `pmiTotalPaid`, `interestSaved`, `monthsSaved`, and extra payment delta summaries.
+- DOM integration smoke suite (Option D) stabilized: lightweight structural + interaction checks (down payment sync, notification auto-hide, PMI placeholder) without brittle style/text coupling.
+
+### Changed
+
+- Legacy `generateAmortizationSchedule` marked DEPRECATED (banner & comment); all active UI flows route through `ScheduleBuilder` outputs stored on each tab (`tabData.builderResult`).
+- Relaxed previously brittle purchase DOM structural validation test to a resilience-focused smoke test (no crash + non-negative loan), reducing false negatives while logic remains covered in pure tests.
+- README updated to reflect version alignment (v16.3.0), refinance unification, snapshot strategy, and PMI semantics consistency across calculator types.
+
+### Fixed
+
+- Inconsistent PMI termination & totals between refinance and purchase paths (now identical through shared engine).
+- Edge case where refinance PMI could appear to persist after reaching threshold with fixed payment override (now drops and records correct `pmiEndsMonth`).
+- Export metric drift (refinance reports previously omitted unified acceleration / PMI totals).
+
+### Documentation
+
+- Added refinance unification section, fixedMonthlyPMI semantics, dual snapshot regression guidance, and deprecation notice for legacy generator.
+- Clarified PMI lifecycle semantics (`pmiEndsMonth` meaning) with refinance examples.
+
+### Internal Notes
+
+- Coverage focus remains on pure logic & classification modules; DOM kept intentionally lean. Future optional work: targeted tests for exporter formatting & minor scoring engine expansion.
+
 ## v16.2.1 (October 2025)
 
 ### Added

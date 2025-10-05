@@ -334,6 +334,61 @@ class ReportExporter {
       yPos += 8;
     });
 
+    // Unified schedule metrics (Task 22) – show PMI lifecycle & extra payment acceleration if available
+    if (
+      data.results &&
+      (typeof data.results.pmiEndsMonth !== "undefined" ||
+        data.results.extraDeltas ||
+        typeof data.results.pmiTotalPaid === "number")
+    ) {
+      yPos += 10;
+      doc.setFont("helvetica", "bold");
+      doc.text("Unified Amortization Metrics", 15, yPos);
+      yPos += 10;
+      doc.setFont("helvetica", "normal");
+      const lines = [];
+      if (typeof data.results.pmiEndsMonth !== "undefined") {
+        const endMonth = data.results.pmiEndsMonth; // semantics: 1 = no PMI charged, >1 first PMI-FREE month, null = never
+        let desc = "-";
+        if (endMonth === 1) desc = "No PMI";
+        else if (endMonth == null) desc = "Never Drops";
+        else if (endMonth > 1) {
+          const lastWithPMI = endMonth - 1;
+          const y = Math.floor(lastWithPMI / 12);
+          const m = lastWithPMI % 12;
+          const dur = `${y > 0 ? y + "y " : ""}${m}m`;
+          desc = `Drops after ${dur} (Month ${endMonth})`;
+        }
+        lines.push(["PMI Lifecycle:", desc]);
+      }
+      if (typeof data.results.pmiTotalPaid === "number") {
+        lines.push([
+          "Total PMI Paid:",
+          window.NumberFormatter.formatCurrency(data.results.pmiTotalPaid),
+        ]);
+      }
+      if (data.results.extraDeltas) {
+        const ed = data.results.extraDeltas;
+        if (typeof ed.interestSaved === "number") {
+          lines.push([
+            "Interest Saved (Extra):",
+            window.NumberFormatter.formatCurrency(ed.interestSaved),
+          ]);
+        }
+        if (typeof ed.monthsSaved === "number") {
+          const ms = ed.monthsSaved;
+          const y = Math.floor(ms / 12);
+          const m = ms % 12;
+          lines.push(["Payoff Accelerated:", `${y > 0 ? y + "y " : ""}${m}m`]);
+        }
+      }
+      lines.forEach(([label, value]) => {
+        doc.text(label, 20, yPos);
+        doc.text(value, 120, yPos);
+        yPos += 8;
+      });
+    }
+
     // Add Closing Costs & Points details for Refinance (if provided)
     if (data.refinanceCosts) {
       const rc = data.refinanceCosts;
@@ -1033,12 +1088,48 @@ class ReportExporter {
       ["Loan Term (years)", data.currentRemainingTerm, data.newTerm],
       ["Monthly Payment", data.currentPayment, data.results.newPayment],
       ["", "", ""],
-      ["Savings Analysis", "", ""],
+      ["SAVINGS ANALYSIS", "", ""],
       ["Monthly Savings", "", data.results.monthlySavings],
       ["Total Interest Savings", "", data.results.totalInterestSavings],
       ["Break-Even (months)", "", data.results.breakEvenMonths],
       ["Closing Costs", "", data.closingCosts || 0],
     ];
+
+    // Unified amortization metrics (Task 22)
+    const hasUnified =
+      data.results &&
+      (typeof data.results.pmiEndsMonth !== "undefined" ||
+        data.results.extraDeltas ||
+        typeof data.results.pmiTotalPaid === "number");
+    if (hasUnified) {
+      rows.push(["", "", ""], ["UNIFIED AMORTIZATION METRICS", "", ""]);
+      if (typeof data.results.pmiEndsMonth !== "undefined") {
+        const endMonth = data.results.pmiEndsMonth;
+        let desc = "-";
+        if (endMonth === 1) desc = "No PMI";
+        else if (endMonth == null) desc = "Never Drops";
+        else if (endMonth > 1) {
+          const lastWithPMI = endMonth - 1;
+          const y = Math.floor(lastWithPMI / 12);
+          const m = lastWithPMI % 12;
+          const dur = `${y > 0 ? y + "y " : ""}${m}m`;
+          desc = `Drops after ${dur} (Month ${endMonth})`;
+        }
+        rows.push(["PMI Lifecycle", "", desc]);
+      }
+      if (typeof data.results.pmiTotalPaid === "number") {
+        rows.push(["Total PMI Paid", "", data.results.pmiTotalPaid]);
+      }
+      if (data.results.extraDeltas) {
+        const ed = data.results.extraDeltas;
+        if (typeof ed.interestSaved === "number") {
+          rows.push(["Interest Saved (Extra)", "", ed.interestSaved]);
+        }
+        if (typeof ed.monthsSaved === "number") {
+          rows.push(["Payoff Accelerated (months)", "", ed.monthsSaved]);
+        }
+      }
+    }
 
     return rows.map((row) => row.join(",")).join("\n");
   }

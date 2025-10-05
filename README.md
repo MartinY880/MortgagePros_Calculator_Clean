@@ -1,6 +1,6 @@
 # MortgagePros Calculator<div align="center">
 
-A professional mortgage calculator application built with Electron. Calculate monthly payments, view amortization schedules, and visualize payment breakdowns with interactive charts.# 🏠💰 **MortgagePros Calculator** `v12.6.0` 🏆
+A professional mortgage calculator application built with Electron. Calculate monthly payments, view amortization schedules, and visualize payment breakdowns with interactive charts.# 🏠💰 **MortgagePros Calculator** `v16.3.0` 🏆
 
 ## 🚀 Features[![� Ready-to-Run](https://img.shields.io/badge/🚀_Ready--to--Run-brightgreen?style=for-the-badge)](.)
 
@@ -15,6 +15,8 @@ A professional mortgage calculator application built with Electron. Calculate mo
 - **Export Options**: Generate PDF reports and CSV exports**� Download** → **� Extract** → **▶️ Run** | �️ _Unblock if Windows Defender prompts_
 
 - **Professional UI**: Clean, responsive interface with auto-hiding notifications
+
+- **Quick Down Payment Presets (New)**: One-click 5%, 10%, 15%, 20% buttons instantly update both % and $ fields with robust bidirectional sync (deterministic in tests)
 
 </div>
 
@@ -112,9 +114,9 @@ A professional mortgage calculator application built with Electron. Calculate mo
 
 ## 📝 Version Information</table>
 
-**Version**: 12.6.0 (Updated Edition) ---
+**Version**: 16.3.0 (Unified Engine Edition) ---
 
-**Last Updated**: September 2025
+**Last Updated**: October 2025
 
 **Status**: Production Ready ✅## 🎯 **System Requirements** | 🛠️ **Tech Stack** | 📋 **IT Notes**
 
@@ -190,11 +192,12 @@ This is a pre-built portable application. To modify or rebuild:
 - Chart.js required for visualization features
 - All dependencies are bundled in node_modules for portability
 
-### Internal Architecture (v16.2.1 Enhancement)
+### Internal Architecture (v16.3.0 Unified)
 
-- Core amortization, PMI gating, extra payment acceleration, and baseline interest savings logic are unified in `ScheduleBuilder` (modules/calculators/ScheduleBuilder.js).
-- Purchase & Refinance tabs now delegate to this shared engine (see `calculateMortgage`), ensuring consistency with comparison scoring logic.
-- Engine output is persisted on each tab as `tabData.builderResult` for future export/report extensions.
+- Core amortization, PMI gating, extra payment acceleration, baseline counterfactual interest savings, and PMI lifecycle tracking run through a single engine: `ScheduleBuilder` (`modules/calculators/ScheduleBuilder.js`).
+- Purchase & Refinance tabs both invoke this engine; refinance no longer maintains a divergent amortization path.
+- Each tab stores the latest engine output in `tabData.builderResult` (source of truth for UI, exports, and future analytics tooling).
+- Legacy `generateAmortizationSchedule` retained only for backward compatibility and explicitly marked DEPRECATED—new features and fixes land exclusively in `ScheduleBuilder`.
 
 ### Unified Engine & PMI Semantics
 
@@ -219,7 +222,9 @@ Two-way sync between dollar amount and percent fields uses drift thresholds:
 
 Pure module: `purchase/DownPaymentSync.js` exposes `processEdit(state, edit)` for deterministic testing.
 
-### Headless Purchase Scenario Logic
+### Headless Purchase Scenario Logic & Refinance Parity
+
+`purchase/PurchaseLogic.js` and corresponding refinance orchestration both normalize inputs before calling `ScheduleBuilder`, guaranteeing identical interpretations of LTV, PMI termination, and extra payment acceleration. Refinance introduces an optional `fixedMonthlyPMI` override (see below).
 
 `purchase/PurchaseLogic.js` wraps ScheduleBuilder providing loanAmount, initial LTV, and normalized PMI metadata (forcing `pmiEndsMonth=1` when PMI is not applicable). This enables logic tests without DOM side-effects.
 
@@ -227,7 +232,44 @@ Pure module: `purchase/DownPaymentSync.js` exposes `processEdit(state, edit)` fo
 
 `purchase/PMIClassification.js` returns a semantic state machine with states: pending | none | active | ignored | possible plus badge classes (ltv-pending, ltv-cash, ltv-good, ltv-borderline, ltv-high). This isolates UI messaging from calculation concerns.
 
-### Regression Testing Strategy
+### Regression Testing Strategy (Dual Snapshots)
+
+Two canonical snapshot baselines now protect metric invariants:
+
+| Snapshot  | File                      | Core Assertions                                                             |
+| --------- | ------------------------- | --------------------------------------------------------------------------- |
+| Purchase  | `purchase.snapshot.json`  | monthlyPI, pmiEndsMonth, pmiTotalPaid (often 0), monthsSaved, interestSaved |
+| Refinance | `refinance.snapshot.json` | Same metric set plus validation of refinance PMI drop & savings integrity   |
+
+Update workflow:
+
+1. Delete the snapshot you intend to recalibrate.
+2. Run tests once to regenerate.
+3. Inspect diff & rationale (e.g., algorithmic improvement vs bug fix).
+4. Commit with a concise explanation (future: ENV flag gate planned).
+
+Pure logic suites cover PMI state machine, down payment sync drift rules, amortization acceleration, and fixed PMI override semantics. DOM tests intentionally remain minimal (smoke validation + key interaction sync) to avoid brittleness.
+
+### Refinance `fixedMonthlyPMI` Override
+
+Refinance scenarios can model a contractual fixed PMI payment using `fixedMonthlyPMI`. The engine will:
+
+- Apply the fixed amount until LTV crosses the termination threshold.
+- Record `pmiMeta.pmiEndsMonth` using the same canonical semantics as percentage-based PMI.
+- Omit percentage-derived PMI calculations to prevent double counting.
+
+Result metrics (`pmiTotalPaid`, `interestSaved`, `monthsSaved`) remain consistent with purchase output fields, enabling unified exports and comparisons.
+
+### Exporter Enhancements (Unified Metrics)
+
+The PDF and CSV exporters aggregate:
+
+- PMI lifecycle (start vs `pmiEndsMonth`)
+- Total PMI paid (`pmiTotalPaid`)
+- Acceleration benefits (`interestSaved`, `monthsSaved`) from extra payments
+- Core payment decomposition (principal, interest, escrow) and payoff horizon
+
+All metrics sourced from `builderResult` to ensure a single authoritative computation path.
 
 Logic test suites (Jest) cover:
 
@@ -246,7 +288,19 @@ Run-time safeguards:
 - Term > 40 years -> warning banner
 - Extra payment > monthly P&I multiple thresholds -> advisory
 
-These are implemented at the UI layer but calculation outcomes are validated by tests to remain invariant.
+These are implemented at the UI layer but calculation outcomes are validated by headless tests to remain invariant. Structural DOM tests were intentionally softened (smoke focus) to eliminate false negatives while preserving confidence in core math via pure suites.
+
+---
+
+### Deprecation Notice
+
+`generateAmortizationSchedule` is deprecated and will be removed in a future major iteration. All feature work, bug fixes, and metric evolution take place exclusively in `ScheduleBuilder`. Migration guidance:
+
+1. Replace legacy generator calls with normalized input → `ScheduleBuilder.build()`.
+2. Use returned `pmiMeta`, `interestSaved`, and `monthsSaved` instead of ad hoc calculations.
+3. Leverage snapshot baselines to validate behavior parity during transition.
+
+---
 
 ---
 

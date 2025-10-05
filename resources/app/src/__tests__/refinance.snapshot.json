@@ -1,0 +1,16 @@
+{
+  "v": 1,
+  "metrics": {
+    "amount": 310000,
+    "rate": 5.85,
+    "term": 30,
+    "monthlyPI": 1828.82,
+    "monthlyPMIInput": 130,
+    "totalInterest": 277040.16,
+    "payoffMonths": 297,
+    "pmiEndsMonth": 44,
+    "pmiTotalPaid": 5590,
+    "interestSavedWithExtra": 71333.89,
+    "monthsSaved": 63
+  }
+}

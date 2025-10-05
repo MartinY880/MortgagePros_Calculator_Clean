@@ -25,6 +25,7 @@
  * @property {number} extra Extra principal payment applied every month
  * @property {number} appraisedValue Property value for LTV calculations
  * @property {number} [pmiEndRule=80] LTV threshold percentage (80 or 78)
+ * @property {number} [fixedMonthlyPMI] Optional explicit monthly PMI dollar amount override (used for refinance path). If provided >0 it takes precedence over rate-derived or externally computed values.
  *
  * @typedef {Object} PmiMeta
  * @property {number} pmiMonthlyInput Original monthly PMI input value
@@ -68,10 +69,11 @@ function buildFixedLoanSchedule(loanData) {
     amount,
     rate,
     term,
-    pmi,
+    pmi, // legacy/monthly PMI input (purchase path passes computed monthly PMI from rate)
+    fixedMonthlyPMI, // NEW override for refinance path (explicit monthly dollars)
     propertyTax,
     homeInsurance,
-    hoa = 0, // NEW: monthly HOA dues
+    hoa = 0, // monthly HOA dues
     extra,
     appraisedValue,
   } = loanData;
@@ -94,8 +96,14 @@ function buildFixedLoanSchedule(loanData) {
   const pmiThresholdLTV = selectedRule / 100;
   const hasAppraised = appraisedValue && appraisedValue > 0;
   const startingLTV = hasAppraised ? amount / appraisedValue : null;
+  // Determine which PMI input to use (override precedence)
+  const effectivePMI =
+    typeof fixedMonthlyPMI === "number" && fixedMonthlyPMI > 0
+      ? fixedMonthlyPMI
+      : pmi || 0;
+
   let pmiApplies =
-    pmi > 0 &&
+    effectivePMI > 0 &&
     hasAppraised &&
     startingLTV !== null &&
     startingLTV > pmiThresholdLTV;
@@ -132,7 +140,7 @@ function buildFixedLoanSchedule(loanData) {
     if (pmiApplies) {
       const currentLTV = balance / appraisedValue;
       if (currentLTV > pmiThresholdLTV) {
-        monthlyPMICharge = pmi;
+        monthlyPMICharge = effectivePMI;
       } else {
         pmiApplies = false;
         pmiEndsMonth = month; // first PMI-free month
@@ -164,7 +172,7 @@ function buildFixedLoanSchedule(loanData) {
 
   // Handle case where PMI never applied
   if (
-    pmi > 0 &&
+    effectivePMI > 0 &&
     (!hasAppraised || startingLTV === null || startingLTV <= pmiThresholdLTV)
   ) {
     pmiEndsMonth = 1; // signify not charged
@@ -173,7 +181,7 @@ function buildFixedLoanSchedule(loanData) {
 
   const initialMonthlyPayment =
     monthlyPI +
-    (pmiApplies ? pmi : 0) +
+    (pmiApplies ? effectivePMI : 0) +
     monthlyPropertyTax +
     homeInsurance +
     hoa;
@@ -196,7 +204,7 @@ function buildFixedLoanSchedule(loanData) {
     let bMonth = 0;
     let bTotalInterest = 0;
     let bPmiApplies =
-      pmi > 0 &&
+      effectivePMI > 0 &&
       hasAppraised &&
       startingLTV !== null &&
       startingLTV > pmiThresholdLTV;
@@ -245,7 +253,7 @@ function buildFixedLoanSchedule(loanData) {
     monthlyPropertyTax,
     monthlyInsurance: homeInsurance,
     monthlyHOA: hoa,
-    monthlyPMIInput: pmi,
+    monthlyPMIInput: effectivePMI,
     totalMonthlyPayment: initialMonthlyPayment,
     baseMonthlyPaymentNoPMI,
     totalInterest,
@@ -289,7 +297,7 @@ function buildFixedLoanSchedule(loanData) {
       startingLTV,
     },
     pmiMeta: {
-      pmiMonthlyInput: pmi,
+      pmiMonthlyInput: effectivePMI,
       pmiEndsMonth,
       pmiTotalPaid,
       thresholdLTV: pmiThresholdLTV,
