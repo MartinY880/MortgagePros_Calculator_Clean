@@ -105,6 +105,20 @@ body {
     color var(--transition-medium);
 }
 
+/* Accessibility utility: visually hide content while keeping it available to assistive tech */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
+
 .main-container {
   max-width: 1600px;
   margin: 0 auto;
@@ -744,6 +758,109 @@ canvas {
   background: var(--card-bg);
   border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
   padding: var(--spacing-sm) var(--spacing-md) 0;
+
+  /* ---------------------------------------------
+   HELOC Metrics Panel (Task 10 Styling Refinement)
+---------------------------------------------- */
+  #helocMetricsPanel .card-body {
+    padding: var(--spacing-md) var(--spacing-md) var(--spacing-sm);
+  }
+
+  #helocMetricsPanel .result-item.small {
+    padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
+    background: linear-gradient(
+      135deg,
+      rgba(109, 40, 217, 0.08),
+      rgba(147, 51, 234, 0.08)
+    );
+    border: 1px solid rgba(147, 51, 234, 0.2);
+  }
+
+  [data-theme="dark"] #helocMetricsPanel .result-item.small {
+    background: linear-gradient(
+      135deg,
+      rgba(147, 51, 234, 0.18),
+      rgba(109, 40, 217, 0.18)
+    );
+    border-color: rgba(192, 132, 252, 0.35);
+  }
+
+  #helocMetricsPanel .result-item.small h6 {
+    font-size: 0.55rem;
+    letter-spacing: 0.06em;
+    color: #6d28d9;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+  }
+  [data-theme="dark"] #helocMetricsPanel .result-item.small h6 {
+    color: #c4b5fd;
+  }
+
+  #helocMetricsPanel .result-item.small .result-value {
+    font-size: 0.95rem;
+    font-weight: 600;
+    background: linear-gradient(135deg, #6d28d9, #9333ea);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* LTV state coloring */
+  .ltv-state-low {
+    color: #059669 !important;
+  }
+  .ltv-state-medium {
+    color: #d97706 !important;
+  }
+  .ltv-state-high {
+    color: #dc2626 !important;
+  }
+
+  /* Convert gradient text class override for state classes */
+  #helocMetricCombinedLtv.ltv-state-low,
+  #helocMetricCombinedLtv.ltv-state-medium,
+  #helocMetricCombinedLtv.ltv-state-high {
+    background: none;
+    -webkit-text-fill-color: currentColor;
+  }
+
+  /* Responsive stacking: on <576px stack two metrics per row gracefully */
+  @media (max-width: 575.98px) {
+    #helocMetricsPanel .row > [class*="col-"] {
+      flex: 0 0 50%;
+      max-width: 50%;
+    }
+    #helocMetricsPanel .row.mb-2:last-of-type > [class*="col-"] {
+      flex: 0 0 100%;
+      max-width: 100%;
+    }
+  }
+
+  @media (max-width: 420px) {
+    #helocMetricsPanel .row > [class*="col-"] {
+      flex: 0 0 100%;
+      max-width: 100%;
+    }
+    #helocMetricsPanel .result-item.small {
+      text-align: left;
+    }
+  }
+
+  /* Warning row refinement */
+  #helocLtvWarningRow .alert {
+    border: 1px solid #d97706;
+    background: #fef3c7;
+    color: #92400e;
+  }
+  [data-theme="dark"] #helocLtvWarningRow .alert {
+    background: #78350f;
+    color: #fde68a;
+    border-color: #fbbf24;
+  }
+  #helocLtvWarningRow .heloc-warning-item + .heloc-warning-item {
+    margin-top: 2px;
+  }
 }
 
 .nav-tabs .nav-link {

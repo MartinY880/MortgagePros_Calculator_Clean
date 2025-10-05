@@ -59,12 +59,13 @@ function showNotification(message, type = "danger") {
   }, 3000);
 
   // Scroll to top to ensure visibility (guard for test environments like jsdom)
+  // In jsdom test environment window.scrollTo is not implemented; guard to avoid noisy errors
+  if (typeof window === "undefined" || typeof window.scrollTo !== "function")
+    return;
   try {
-    if (typeof window.scrollTo === "function") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
+    window.scrollTo({ top: top || 0, behavior: "smooth" });
   } catch (_) {
-    /* ignore */
+    // Swallow not-implemented errors silently (accessibility summary tests rely on error-free flow)
   }
 }
 
@@ -89,10 +90,16 @@ try {
         if (typeof applyPurchaseValidationErrors === "function")
           module.exports.applyPurchaseValidationErrors =
             applyPurchaseValidationErrors;
+        if (typeof clearHelocFieldErrors === "function")
+          module.exports.clearHelocFieldErrors = clearHelocFieldErrors;
+        if (typeof applyHelocValidationErrors === "function")
+          module.exports.applyHelocValidationErrors =
+            applyHelocValidationErrors;
         // Expose lightweight getters for tab data so DOM integration tests can
         // inspect builderResult without relying on window-scoped globals
         module.exports.getPurchaseData = () => purchaseData;
         module.exports.getRefinanceData = () => refinanceData;
+        module.exports.getHelocData = () => helocData;
       } catch {
         /* ignore */
       }
@@ -1250,6 +1257,23 @@ function switchTab(tabType, saveCurrentState = true) {
   if (saveCurrentState && currentTab !== "comparison") {
     localStorage.setItem("mortgageCalculator_currentTab", currentTab);
   }
+
+  // Enforce HELOC metrics visibility restrictions
+  try {
+    const helocPanel = document.getElementById("helocMetricsPanel");
+    const genericCard = document.getElementById("genericPaymentSummaryCard");
+    if (helocPanel && genericCard) {
+      if (tabType === "heloc" && helocData && helocData.isCalculated) {
+        helocPanel.style.display = "block";
+        genericCard.style.display = "none";
+      } else {
+        helocPanel.style.display = "none";
+        genericCard.style.display = "block";
+      }
+    }
+  } catch (_) {
+    /* no-op */
+  }
 }
 
 // Load logo with proper path handling for packaged app
@@ -2037,8 +2061,131 @@ if (
 }
 
 // ---------------------------------------------
-// Origination LTV & PMI Status (Priority 1 Task 3)
+// HELOC Inline Validation (Priority 3 Task 9)
 // ---------------------------------------------
+// Map raw message substrings (since HELOC validator returns plain strings) to field IDs
+const HELOC_MESSAGE_FIELD_MAP = [
+  { match: "Home value", field: "helocPropertyValue" },
+  { match: "Mortgage balance", field: "helocOutstandingBalance" },
+  { match: "Credit limit", field: "helocLoanAmount" },
+  { match: "Interest rate", field: "helocInterestRate" },
+  { match: "Draw period", field: "helocInterestOnlyPeriod" },
+  { match: "Repayment period", field: "helocRepaymentPeriod" },
+  // Combined LTV & generic ratio warnings – surface near credit limit input
+  { match: "Combined loan-to-value", field: "helocLoanAmount" },
+  // Fallbacks (if future messages reference Draw amount etc.)
+  { match: "Draw amount", field: "helocLoanAmount" },
+];
+
+function mapHelocMessageToField(message) {
+  const lower = message.toLowerCase();
+  const found = HELOC_MESSAGE_FIELD_MAP.find((m) =>
+    lower.includes(m.match.toLowerCase())
+  );
+  return found ? found.field : null;
+}
+
+function clearHelocFieldErrors() {
+  const form = document.getElementById("helocForm");
+  if (!form) return;
+  form
+    .querySelectorAll(".is-invalid")
+    .forEach((el) => el.classList.remove("is-invalid"));
+  form
+    .querySelectorAll(".invalid-feedback[data-heloc-inline]")
+    .forEach((fb) => fb.remove());
+}
+
+function applyHelocValidationErrors(messages) {
+  if (!Array.isArray(messages)) return;
+  // Populate fields and gather for summary
+  const summary = document.getElementById("helocValidationSummary");
+  const collected = [];
+  messages.forEach((msg) => {
+    const fieldId = mapHelocMessageToField(msg);
+    if (!fieldId) {
+      collected.push(msg); // still show in summary
+      return;
+    }
+    const input = document.getElementById(fieldId);
+    if (!input) {
+      collected.push(msg);
+      return;
+    }
+    input.classList.add("is-invalid");
+    const existing = input.parentElement.querySelector(
+      `.invalid-feedback[data-heloc-inline][data-for="${fieldId}"]`
+    );
+    if (existing) {
+      existing.textContent = msg;
+      collected.push(msg);
+    } else {
+      const div = document.createElement("div");
+      div.className = "invalid-feedback";
+      div.dataset.helocInline = "true";
+      div.dataset.for = fieldId;
+      div.textContent = msg;
+      input.parentElement.appendChild(div);
+      collected.push(msg);
+    }
+  });
+  if (summary) {
+    // Compose accessible summary: list all unique messages (fallback to original if none collected)
+    const unique = [...new Set(collected.length ? collected : messages)];
+    if (unique.length) {
+      summary.innerHTML = `<strong>${unique.length} validation issue${
+        unique.length > 1 ? "s" : ""
+      }:</strong> <ul class="mb-0 ps-3">${unique
+        .map((m) => `<li>${m}</li>`)
+        .join("")}</ul>`;
+      summary.classList.remove("visually-hidden");
+      summary.removeAttribute("aria-hidden");
+    } else {
+      // No issues -> hide
+      summary.textContent = "";
+      summary.classList.add("visually-hidden");
+      summary.setAttribute("aria-hidden", "true");
+    }
+  }
+}
+
+function attachHelocValidationListenersOnce() {
+  if (attachHelocValidationListenersOnce._attached) return;
+  const ids = [
+    "helocPropertyValue",
+    "helocOutstandingBalance",
+    "helocLoanAmount",
+    "helocInterestRate",
+    "helocInterestOnlyPeriod",
+    "helocRepaymentPeriod",
+  ];
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", () => {
+      if (!el.classList.contains("is-invalid")) return;
+      // Lightweight clear (full validation occurs on calculate)
+      el.classList.remove("is-invalid");
+      const fb = el.parentElement.querySelector(
+        `.invalid-feedback[data-heloc-inline][data-for="${id}"]`
+      );
+      if (fb) fb.remove();
+    });
+  });
+  attachHelocValidationListenersOnce._attached = true;
+}
+
+if (
+  document.readyState === "complete" ||
+  document.readyState === "interactive"
+) {
+  attachHelocValidationListenersOnce();
+} else {
+  document.addEventListener("DOMContentLoaded", () => {
+    attachHelocValidationListenersOnce();
+  });
+}
+
 let _lastPmiState = null; // track transitions for optional notice
 let _pmiCapNotified = false;
 let _pmiIgnoredNotified = false;
@@ -2227,7 +2374,7 @@ if (
 
 // Calculate HELOC based on input values
 function calculateHELOC() {
-  // Get values from HELOC form
+  // Extract raw form values
   const propertyValue = parseFloat(
     document.getElementById("helocPropertyValue").value
   );
@@ -2247,49 +2394,282 @@ function calculateHELOC() {
     document.getElementById("helocRepaymentPeriod").value
   );
 
-  // Validate HELOC inputs
-  if (isNaN(propertyValue) || propertyValue <= 0) {
-    showErrorMessage("Please enter a valid property value");
-    return;
+  // Map to validator schema (treat helocAmount as both creditLimit & drawAmount for current full-draw assumption)
+  const helocInputForValidation = {
+    homeValue: propertyValue,
+    mortgageBalance: isNaN(outstandingBalance) ? 0 : outstandingBalance,
+    creditLimit: helocAmount,
+    interestRate: interestRate,
+    drawPeriod: interestOnlyPeriod,
+    repaymentPeriod: repaymentPeriod,
+    drawAmount: helocAmount,
+  };
+
+  // Centralized validation
+  try {
+    if (
+      typeof InputValidator !== "undefined" &&
+      InputValidator.validateHELOCInputs
+    ) {
+      const validation = InputValidator.validateHELOCInputs(
+        helocInputForValidation
+      );
+      if (!validation.isValid) {
+        // Clear previous inline errors then apply new ones
+        if (typeof clearHelocFieldErrors === "function")
+          clearHelocFieldErrors();
+        if (typeof applyHelocValidationErrors === "function")
+          applyHelocValidationErrors(validation.errors);
+        // Unconditional ensure: populate & unhide summary (guards against any earlier failure)
+        (function forceHelocSummaryVisibility() {
+          const summary = document.getElementById("helocValidationSummary");
+          if (!summary || !Array.isArray(validation.errors)) return;
+          const unique = [...new Set(validation.errors)];
+          if (!unique.length) return; // nothing to show
+          // Only overwrite if empty (avoid clobbering richer inline-mapped content)
+          if (
+            !summary.innerHTML ||
+            summary.classList.contains("visually-hidden")
+          ) {
+            summary.innerHTML = `<strong>${unique.length} validation issue${
+              unique.length > 1 ? "s" : ""
+            }:</strong> <ul class=\"mb-0 ps-3\">${unique
+              .map((m) => `<li>${m}</li>`)
+              .join("")}</ul>`;
+          }
+          summary.classList.remove("visually-hidden");
+          summary.removeAttribute("aria-hidden");
+        })();
+        // Present first error (aggregate already shown inline)
+        showErrorMessage(validation.errors[0] || "Invalid HELOC input");
+        return;
+      }
+      // If we reach here validation passed: hide summary region explicitly
+      const summary = document.getElementById("helocValidationSummary");
+      if (summary) {
+        summary.textContent = "";
+        summary.classList.add("visually-hidden");
+        summary.setAttribute("aria-hidden", "true");
+      }
+    } else {
+      // Fallback legacy validation (InputValidator not loaded in jsdom tests)
+      const legacyErrors = [];
+      if (isNaN(propertyValue) || propertyValue <= 0) {
+        legacyErrors.push("Home value must be greater than 0");
+      }
+      if (!isNaN(outstandingBalance) && outstandingBalance < 0) {
+        legacyErrors.push("Mortgage balance cannot be negative");
+      }
+      if (
+        !isNaN(propertyValue) &&
+        propertyValue > 0 &&
+        !isNaN(outstandingBalance) &&
+        outstandingBalance >= propertyValue
+      ) {
+        legacyErrors.push("Mortgage balance must be less than home value");
+      }
+      if (isNaN(helocAmount) || helocAmount <= 0) {
+        legacyErrors.push("Credit limit must be greater than 0");
+      }
+      if (isNaN(interestRate) || interestRate <= 0) {
+        legacyErrors.push("Interest rate must be greater than 0");
+      }
+      if (interestRate > 30) {
+        legacyErrors.push(
+          "Interest rate seems unusually high for HELOC (over 30%)"
+        );
+      }
+      if (isNaN(interestOnlyPeriod) || interestOnlyPeriod <= 0) {
+        legacyErrors.push("Draw period must be greater than 0");
+      }
+      if (interestOnlyPeriod > 30) {
+        legacyErrors.push("Draw period seems unusually long (over 30 years)");
+      }
+      if (isNaN(repaymentPeriod) || repaymentPeriod <= 0) {
+        legacyErrors.push("Repayment period must be greater than 0");
+      }
+      if (repaymentPeriod > 30) {
+        legacyErrors.push(
+          "Repayment period seems unusually long (over 30 years)"
+        );
+      }
+      // Combined LTV approx (avoid division by zero)
+      if (propertyValue > 0) {
+        const combinedLTV =
+          ((outstandingBalance + helocAmount) / propertyValue) * 100;
+        if (combinedLTV > 90) {
+          legacyErrors.push(
+            "Combined loan-to-value ratio exceeds 90% - this may not be available"
+          );
+        }
+      }
+      if (legacyErrors.length) {
+        if (typeof applyHelocValidationErrors === "function") {
+          applyHelocValidationErrors(legacyErrors);
+        }
+        // Ensure summary visible in legacy path
+        const summary = document.getElementById("helocValidationSummary");
+        if (summary && summary.classList.contains("visually-hidden")) {
+          const unique = [...new Set(legacyErrors)];
+          summary.innerHTML = `<strong>${unique.length} validation issue${
+            unique.length > 1 ? "s" : ""
+          }:</strong> <ul class=\"mb-0 ps-3\">${unique
+            .map((m) => `<li>${m}</li>`)
+            .join("")}</ul>`;
+          summary.classList.remove("visually-hidden");
+          summary.removeAttribute("aria-hidden");
+        }
+        showErrorMessage(legacyErrors[0]);
+        return;
+      }
+      // No legacy errors -> hide any previous summary
+      const summaryOk = document.getElementById("helocValidationSummary");
+      if (summaryOk) {
+        summaryOk.textContent = "";
+        summaryOk.classList.add("visually-hidden");
+        summaryOk.setAttribute("aria-hidden", "true");
+      }
+    }
+  } catch (e) {
+    // Defensive fallback replicating legacy aggregator
+    const legacyErrors = [];
+    if (isNaN(propertyValue) || propertyValue <= 0)
+      legacyErrors.push("Home value must be greater than 0");
+    if (!isNaN(outstandingBalance) && outstandingBalance < 0)
+      legacyErrors.push("Mortgage balance cannot be negative");
+    if (
+      !isNaN(propertyValue) &&
+      propertyValue > 0 &&
+      !isNaN(outstandingBalance) &&
+      outstandingBalance >= propertyValue
+    )
+      legacyErrors.push("Mortgage balance must be less than home value");
+    if (isNaN(helocAmount) || helocAmount <= 0)
+      legacyErrors.push("Credit limit must be greater than 0");
+    if (isNaN(interestRate) || interestRate <= 0)
+      legacyErrors.push("Interest rate must be greater than 0");
+    if (interestRate > 30)
+      legacyErrors.push(
+        "Interest rate seems unusually high for HELOC (over 30%)"
+      );
+    if (isNaN(interestOnlyPeriod) || interestOnlyPeriod <= 0)
+      legacyErrors.push("Draw period must be greater than 0");
+    if (interestOnlyPeriod > 30)
+      legacyErrors.push("Draw period seems unusually long (over 30 years)");
+    if (isNaN(repaymentPeriod) || repaymentPeriod <= 0)
+      legacyErrors.push("Repayment period must be greater than 0");
+    if (repaymentPeriod > 30)
+      legacyErrors.push(
+        "Repayment period seems unusually long (over 30 years)"
+      );
+    if (propertyValue > 0) {
+      const combinedLTV =
+        ((outstandingBalance + helocAmount) / propertyValue) * 100;
+      if (combinedLTV > 90) {
+        legacyErrors.push(
+          "Combined loan-to-value ratio exceeds 90% - this may not be available"
+        );
+      }
+    }
+    if (legacyErrors.length) {
+      if (typeof applyHelocValidationErrors === "function")
+        applyHelocValidationErrors(legacyErrors);
+      const summary = document.getElementById("helocValidationSummary");
+      if (summary && summary.classList.contains("visually-hidden")) {
+        const unique = [...new Set(legacyErrors)];
+        summary.innerHTML = `<strong>${unique.length} validation issue${
+          unique.length > 1 ? "s" : ""
+        }:</strong> <ul class=\"mb-0 ps-3\">${unique
+          .map((m) => `<li>${m}</li>`)
+          .join("")}</ul>`;
+        summary.classList.remove("visually-hidden");
+        summary.removeAttribute("aria-hidden");
+      }
+      showErrorMessage(legacyErrors[0]);
+      return;
+    }
+    // No errors in fallback -> hide summary
+    const summaryOk2 = document.getElementById("helocValidationSummary");
+    if (summaryOk2) {
+      summaryOk2.textContent = "";
+      summaryOk2.classList.add("visually-hidden");
+      summaryOk2.setAttribute("aria-hidden", "true");
+    }
   }
 
-  if (isNaN(helocAmount) || helocAmount <= 0) {
-    showErrorMessage("Please enter a valid HELOC loan amount");
-    return;
-  }
+  // Calculate available equity and LTV (basic; will be enriched in later tasks)
+  const totalDebt =
+    (isNaN(outstandingBalance) ? 0 : outstandingBalance) + helocAmount;
+  const ltv = propertyValue > 0 ? (totalDebt / propertyValue) * 100 : 0;
 
-  if (isNaN(interestRate) || interestRate <= 0) {
-    showErrorMessage("Please enter a valid interest rate");
-    return;
-  }
+  // Persist structured input snapshot (will be reused in later refactor tasks)
+  // JSDoc shape:
+  /**
+   * @typedef {Object} HelocInputs
+   * @property {number} homeValue
+   * @property {number} mortgageBalance
+   * @property {number} creditLimit
+   * @property {number} drawAmount
+   * @property {number} interestRate
+   * @property {number} drawPeriod  // years (interest-only)
+   * @property {number} repaymentPeriod // total years (includes drawPeriod)
+   */
+  helocData.inputs = {
+    homeValue: propertyValue,
+    mortgageBalance: isNaN(outstandingBalance) ? 0 : outstandingBalance,
+    creditLimit: helocAmount,
+    drawAmount: helocAmount, // full draw assumption
+    interestRate: interestRate,
+    drawPeriod: interestOnlyPeriod,
+    repaymentPeriod: repaymentPeriod,
+  };
 
-  if (isNaN(interestOnlyPeriod) || interestOnlyPeriod <= 0) {
-    showErrorMessage("Please enter a valid interest-only period");
-    return;
-  }
+  // Edge case flags & messages collector
+  const edgeFlags = {
+    zeroInterest: false,
+    repaymentMonthsAdjusted: false,
+    balanceClamped: false,
+    roundingAdjusted: false,
+  };
+  const messages = [];
 
-  if (isNaN(repaymentPeriod) || repaymentPeriod <= interestOnlyPeriod) {
-    showErrorMessage(
-      "Repayment period must be greater than interest-only period"
-    );
-    return;
-  }
-
-  // Calculate available equity and LTV
-  const totalDebt = outstandingBalance + helocAmount;
-  const ltv = (totalDebt / propertyValue) * 100;
-
-  // Calculate monthly interest rate
+  // Calculate monthly interest rate (handle zero-rate safely)
   const monthlyRate = interestRate / 100 / 12;
 
-  // Calculate interest-only payment
-  const interestOnlyPayment = helocAmount * monthlyRate;
+  // Compute repaymentMonths (may adjust if user entered invalid combo)
+  let repaymentMonths = (repaymentPeriod - interestOnlyPeriod) * 12;
+  if (repaymentMonths <= 0) {
+    // Attempt automatic adjustment: if repaymentPeriod == interestOnlyPeriod, extend by 1 year
+    if (repaymentPeriod === interestOnlyPeriod) {
+      repaymentMonths = 12; // minimal 1 year repayment
+      edgeFlags.repaymentMonthsAdjusted = true;
+      messages.push(
+        "Repayment period equaled draw period; auto-extended by 1 year (12 months)."
+      );
+    } else {
+      showErrorMessage(
+        "Repayment period must be greater than interest-only period."
+      );
+      return;
+    }
+  }
 
-  // Calculate principal and interest payment for repayment period
-  const repaymentMonths = (repaymentPeriod - interestOnlyPeriod) * 12;
+  // Interest-only payment (zero if zero-rate)
+  let interestOnlyPayment = helocAmount * monthlyRate;
+  if (monthlyRate === 0) {
+    interestOnlyPayment = 0;
+  }
+
+  // Principal & interest payment in repayment phase
   let principalInterestPayment = 0;
-
-  if (repaymentMonths > 0 && monthlyRate > 0) {
+  if (monthlyRate === 0) {
+    // Linear amortization when zero interest
+    principalInterestPayment = helocAmount / repaymentMonths;
+    edgeFlags.zeroInterest = true;
+    messages.push(
+      "Zero interest rate: repayment will be linear principal amortization."
+    );
+  } else if (repaymentMonths > 0) {
     principalInterestPayment =
       (helocAmount *
         (monthlyRate * Math.pow(1 + monthlyRate, repaymentMonths))) /
@@ -2297,18 +2677,121 @@ function calculateHELOC() {
   }
 
   // Generate HELOC amortization schedule
+  // Optional future start date input (if field exists) else default to first of next month
+  let startDate = null;
+  const startDateEl = document.getElementById("helocStartDate");
+  if (startDateEl && startDateEl.value) {
+    const parsed = new Date(startDateEl.value);
+    if (!isNaN(parsed)) startDate = parsed;
+  }
   const helocAmortization = generateHelocAmortizationSchedule(
     helocAmount,
     interestRate,
     interestOnlyPeriod,
-    repaymentPeriod
+    repaymentPeriod,
+    {
+      zeroInterest: monthlyRate === 0,
+      repaymentMonthsOverride: repaymentMonths,
+      onBalanceClamp: () => {
+        edgeFlags.balanceClamped = true;
+      },
+      startDate,
+      accumulate: true,
+    }
   );
+
+  // Rounding adjustment: if final payment's principal < 0.01 *or* total balance already 0 but preceding row has tiny residual addition potential
+  if (helocAmortization.length > 2) {
+    const last = helocAmortization[helocAmortization.length - 1];
+    const penultimate = helocAmortization[helocAmortization.length - 2];
+    if (
+      last.phase === "Principal & Interest" &&
+      penultimate.phase === "Principal & Interest" &&
+      last.principalPayment !== undefined &&
+      last.principalPayment > 0 &&
+      last.principalPayment < 0.01 &&
+      penultimate.balance !== undefined
+    ) {
+      // Fold final tiny principal into penultimate payment
+      penultimate.principalPayment += last.principalPayment;
+      penultimate.payment += last.principalPayment; // maintain total payment integrity for linear interest=0 case
+      penultimate.cumulativePrincipal += last.principalPayment;
+      // Adjust balance to 0 in penultimate row
+      penultimate.balance = 0;
+      // Remove last row
+      helocAmortization.pop();
+      edgeFlags.roundingAdjusted = true;
+      messages.push(
+        "Final fractional cent principal folded into prior payment."
+      );
+    }
+  }
 
   // Calculate total interest paid
   const totalInterest = helocAmortization.reduce(
     (sum, payment) => sum + payment.interestPayment,
     0
   );
+
+  // Derive phase-specific interest totals
+  let totalInterestDrawPhase = 0;
+  let totalInterestRepayPhase = 0;
+  if (Array.isArray(helocAmortization)) {
+    for (const row of helocAmortization) {
+      if (row.phase === "Interest-Only")
+        totalInterestDrawPhase += row.interestPayment;
+      else if (row.phase === "Principal & Interest")
+        totalInterestRepayPhase += row.interestPayment;
+    }
+  }
+
+  // Compute available equity (pre-draw) & combined LTV
+  const availableEquity =
+    propertyValue - (isNaN(outstandingBalance) ? 0 : outstandingBalance);
+  const combinedLTV =
+    propertyValue > 0
+      ? (((isNaN(outstandingBalance) ? 0 : outstandingBalance) + helocAmount) /
+          propertyValue) *
+        100
+      : 0;
+
+  // LTV threshold logic (configurable future; hard-coded now)
+  const HIGH_LTV_THRESHOLD = 90; // warning
+  const MAX_LTV_THRESHOLD = 100; // block
+  const HIGH_RATE_THRESHOLD = 15; // Task 11: soft warning when interest rate is very high
+  let ltvWarning = null;
+  let ltvBlocked = false;
+  if (combinedLTV > MAX_LTV_THRESHOLD) {
+    ltvBlocked = true;
+    ltvWarning = `Combined LTV ${combinedLTV.toFixed(
+      2
+    )}% exceeds ${MAX_LTV_THRESHOLD}% limit.`;
+  } else if (combinedLTV >= HIGH_LTV_THRESHOLD) {
+    ltvWarning = `High Combined LTV ${combinedLTV.toFixed(
+      2
+    )}% (≥ ${HIGH_LTV_THRESHOLD}%)`;
+  }
+
+  if (ltvBlocked) {
+    showErrorMessage(ltvWarning || "Combined LTV exceeds allowed maximum");
+    return;
+  }
+
+  // High interest rate warning (non-blocking)
+  let rateWarning = null;
+  if (interestRate > HIGH_RATE_THRESHOLD) {
+    rateWarning = `High Interest Rate ${interestRate.toFixed(
+      2
+    )}% (≥ ${HIGH_RATE_THRESHOLD}%)`;
+    messages.push(rateWarning);
+  }
+
+  // Determine payoff date (last schedule row date if present)
+  let payoffDate = null;
+  if (helocAmortization.length > 0) {
+    const last = helocAmortization[helocAmortization.length - 1];
+    payoffDate = last.paymentDate instanceof Date ? last.paymentDate : null;
+  }
 
   // Store results
   helocData.amortizationData = helocAmortization;
@@ -2322,6 +2805,42 @@ function calculateHELOC() {
     ltv,
     "heloc",
   ];
+  // Derive phaseTotals if provided by schedule generator metadata
+  let phaseTotals = null;
+  if (
+    helocAmortization &&
+    helocAmortization._meta &&
+    helocAmortization._meta.phaseTotals
+  ) {
+    phaseTotals = helocAmortization._meta.phaseTotals;
+  }
+  // New structured result (non-breaking; consumers can migrate gradually)
+  helocData.result = {
+    interestOnlyPayment,
+    principalInterestPayment,
+    principal: helocAmount,
+    totalInterest,
+    totalInterestDrawPhase,
+    totalInterestRepayPhase,
+    availableEquity,
+    // Equity remaining after full assumed draw (availableEquity - principal)
+    postDrawEquity: availableEquity - helocAmount,
+    combinedLTV,
+    ltvOrigin: ltv,
+    ltvWarning,
+    rateWarning,
+    warnings: [
+      ...[],
+      ...(ltvWarning ? [ltvWarning] : []),
+      ...(rateWarning ? [rateWarning] : []),
+    ],
+    schedule: helocAmortization,
+    payoffDate,
+    inputs: helocData.inputs,
+    edgeFlags,
+    messages,
+    phaseTotals,
+  };
   helocData.isCalculated = true;
 
   // Update UI with HELOC results
@@ -2344,6 +2863,7 @@ function calculateHELOC() {
 
   // Render charts
   renderCharts();
+  ensureTabsSectionVisible();
 
   // Save data to cache
   saveDataToCache();
@@ -3755,16 +4275,40 @@ function generateHelocAmortizationSchedule(
   helocAmount,
   interestRate,
   interestOnlyPeriod,
-  repaymentPeriod
+  repaymentPeriod,
+  options = {}
 ) {
   const schedule = [];
   let balance = helocAmount;
   const monthlyInterestRate = interestRate / 100 / 12;
+  const zeroInterest = !!options.zeroInterest;
+  const repaymentMonthsOverride = options.repaymentMonthsOverride;
+  const onBalanceClamp =
+    typeof options.onBalanceClamp === "function"
+      ? options.onBalanceClamp
+      : () => {};
+  const startDate =
+    options.startDate instanceof Date && !isNaN(options.startDate)
+      ? options.startDate
+      : null;
+  const accumulate = !!options.accumulate;
 
-  // Get current date for payment schedule
-  const currentDate = new Date();
-  const currentMonth = currentDate.getMonth();
-  const currentYear = currentDate.getFullYear();
+  // Cumulative trackers
+  let cumulativePrincipal = 0;
+  let cumulativeInterest = 0;
+  const phaseTotals = {
+    interestOnly: { principal: 0, interest: 0, payments: 0 },
+    repayment: { principal: 0, interest: 0, payments: 0 },
+  };
+
+  // Establish base date: either provided startDate or first of next month
+  let baseDate;
+  if (startDate) {
+    baseDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  } else {
+    const now = new Date();
+    baseDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  }
 
   // Interest-only period
   const interestOnlyMonths = interestOnlyPeriod * 12;
@@ -3775,8 +4319,15 @@ function generateHelocAmortizationSchedule(
     paymentNumber <= interestOnlyMonths;
     paymentNumber++
   ) {
-    const paymentDate = new Date(currentYear, currentMonth + paymentNumber, 1);
+    const paymentDate = new Date(
+      baseDate.getFullYear(),
+      baseDate.getMonth() + (paymentNumber - 1),
+      1
+    );
 
+    phaseTotals.interestOnly.interest += interestOnlyPayment;
+    phaseTotals.interestOnly.payments += interestOnlyPayment;
+    cumulativeInterest += interestOnlyPayment;
     schedule.push({
       paymentNumber: paymentNumber,
       paymentDate: paymentDate,
@@ -3785,50 +4336,78 @@ function generateHelocAmortizationSchedule(
       interestPayment: interestOnlyPayment,
       balance: balance,
       phase: "Interest-Only",
+      cumulativePrincipal,
+      cumulativeInterest,
     });
   }
 
   // Principal and interest period
-  const repaymentMonths = (repaymentPeriod - interestOnlyPeriod) * 12;
+  const rawRepaymentMonths = (repaymentPeriod - interestOnlyPeriod) * 12;
+  const repaymentMonths =
+    typeof repaymentMonthsOverride === "number" && repaymentMonthsOverride > 0
+      ? repaymentMonthsOverride
+      : rawRepaymentMonths;
   let principalInterestPayment = 0;
 
   if (repaymentMonths > 0) {
-    principalInterestPayment =
-      (balance *
-        (monthlyInterestRate *
-          Math.pow(1 + monthlyInterestRate, repaymentMonths))) /
-      (Math.pow(1 + monthlyInterestRate, repaymentMonths) - 1);
+    if (zeroInterest) {
+      principalInterestPayment = helocAmount / repaymentMonths;
+    } else {
+      principalInterestPayment =
+        (balance *
+          (monthlyInterestRate *
+            Math.pow(1 + monthlyInterestRate, repaymentMonths))) /
+        (Math.pow(1 + monthlyInterestRate, repaymentMonths) - 1);
+    }
 
-    for (let month = 1; month <= repaymentMonths && balance > 0.01; month++) {
+    for (let month = 1; month <= repaymentMonths && balance > 0.0001; month++) {
       const paymentNumber = interestOnlyMonths + month;
       const paymentDate = new Date(
-        currentYear,
-        currentMonth + paymentNumber,
+        baseDate.getFullYear(),
+        baseDate.getMonth() + (paymentNumber - 1),
         1
       );
 
-      const interestPayment = balance * monthlyInterestRate;
-      const principalPayment = Math.min(
-        principalInterestPayment - interestPayment,
-        balance
-      );
+      const interestPayment = zeroInterest ? 0 : balance * monthlyInterestRate;
+      let principalPayment = zeroInterest
+        ? Math.min(principalInterestPayment, balance)
+        : Math.min(principalInterestPayment - interestPayment, balance);
 
       balance -= principalPayment;
 
-      if (balance < 0) balance = 0;
+      // Clamp tiny floating residuals
+      if (balance !== 0 && Math.abs(balance) < 0.005) {
+        balance = 0;
+        onBalanceClamp();
+      }
 
+      cumulativePrincipal += principalPayment;
+      cumulativeInterest += interestPayment;
+      phaseTotals.repayment.principal += principalPayment;
+      phaseTotals.repayment.interest += interestPayment;
+      phaseTotals.repayment.payments += principalInterestPayment;
       schedule.push({
-        paymentNumber: paymentNumber,
-        paymentDate: paymentDate,
+        paymentNumber,
+        paymentDate,
         payment: principalInterestPayment,
-        principalPayment: principalPayment,
-        interestPayment: interestPayment,
-        balance: balance,
+        principalPayment,
+        interestPayment,
+        balance,
         phase: "Principal & Interest",
+        cumulativePrincipal,
+        cumulativeInterest,
       });
     }
   }
-
+  if (accumulate) {
+    // Attach metadata non-enumerably to avoid CSV/export breaking if iterating values
+    Object.defineProperty(schedule, "_meta", {
+      value: { phaseTotals },
+      enumerable: false,
+      configurable: false,
+      writable: false,
+    });
+  }
   return schedule;
 }
 
@@ -3940,6 +4519,116 @@ function updateHelocResultsUI(
   );
   if (monthlyPaymentLabel) {
     monthlyPaymentLabel.textContent = "Interest-Only Payment";
+  }
+
+  // --- HELOC Metrics Panel Population (Task 10) ---
+  try {
+    const panel = document.getElementById("helocMetricsPanel");
+    const genericCard = document.getElementById("genericPaymentSummaryCard");
+    if (panel && helocData && helocData.result) {
+      // Only show if actively on HELOC tab; otherwise keep hidden
+      if (typeof currentTab !== "undefined" && currentTab === "heloc") {
+        panel.style.display = "block";
+        if (genericCard) genericCard.style.display = "none";
+      }
+      const r = helocData.result;
+      const setText = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+      };
+      setText(
+        "helocMetricCombinedLtv",
+        (r.combinedLTV ?? ltv).toFixed(2) + "%"
+      );
+      // Apply LTV state color classes based on thresholds (<70 low, <90 medium, >=90 high)
+      try {
+        const ltvEl = document.getElementById("helocMetricCombinedLtv");
+        if (ltvEl) {
+          const numericCombinedLtv = Number(r.combinedLTV ?? ltv);
+          // Clear previous state classes
+          ltvEl.classList.remove(
+            "ltv-state-low",
+            "ltv-state-medium",
+            "ltv-state-high"
+          );
+          if (!isNaN(numericCombinedLtv)) {
+            if (numericCombinedLtv < 70) {
+              ltvEl.classList.add("ltv-state-low");
+            } else if (numericCombinedLtv < 90) {
+              ltvEl.classList.add("ltv-state-medium");
+            } else {
+              ltvEl.classList.add("ltv-state-high");
+            }
+          }
+        }
+      } catch (_) {
+        // Non-fatal – styling enhancement only
+      }
+      setText(
+        "helocMetricAvailableEquity",
+        formatCurrency(
+          r.availableEquity != null
+            ? r.availableEquity
+            : propertyValue - outstandingBalance
+        )
+      );
+      setText(
+        "helocMetricPostDrawEquity",
+        formatCurrency(
+          r.postDrawEquity != null
+            ? r.postDrawEquity
+            : propertyValue - outstandingBalance - helocAmount
+        )
+      );
+      setText(
+        "helocMetricInterestOnlyPayment",
+        formatCurrency(interestOnlyPayment)
+      );
+      setText(
+        "helocMetricRepaymentPayment",
+        formatCurrency(principalInterestPayment)
+      );
+      setText("helocMetricTotalInterest", formatCurrency(totalInterest));
+      setText(
+        "helocMetricDrawInterest",
+        formatCurrency(
+          r.totalInterestDrawPhase != null ? r.totalInterestDrawPhase : 0
+        )
+      );
+      setText(
+        "helocMetricRepayInterest",
+        formatCurrency(
+          r.totalInterestRepayPhase != null
+            ? r.totalInterestRepayPhase
+            : totalInterest
+        )
+      );
+      // Payoff date (already computed above as payoffDateFormatted)
+      setText("helocMetricPayoffDate", payoffDateFormatted);
+      // LTV warning row
+      const warnRow = document.getElementById("helocLtvWarningRow");
+      const warnMsg = document.getElementById("helocLtvWarningMsg");
+      if (warnRow && warnMsg) {
+        const warnings = r.warnings || (r.ltvWarning ? [r.ltvWarning] : []);
+        if (warnings.length > 0) {
+          // If multiple warnings, join with line breaks; preserve existing semantics
+          warnMsg.innerHTML = warnings
+            .map(
+              (w) =>
+                `<span class="heloc-warning-item" style="display:block;">${w.replace(
+                  /</g,
+                  "&lt;"
+                )}</span>`
+            )
+            .join("");
+          warnRow.style.display = "block";
+        } else {
+          warnRow.style.display = "none";
+        }
+      }
+    }
+  } catch (_) {
+    // Fail silently; metrics panel is progressive enhancement
   }
 }
 
@@ -4069,6 +4758,34 @@ function createTestChart() {
 function renderCharts() {
   console.log("renderCharts() called");
   renderAmortizationCharts();
+}
+
+// Helper: ensure tabs section visible and summary tab active (used after HELOC calc)
+function ensureTabsSectionVisible() {
+  const tabsSectionEl = document.getElementById("tabsSection");
+  if (!tabsSectionEl) return;
+  tabsSectionEl.style.display = "block";
+  const summaryTabBtn = document.getElementById("summary-tab");
+  const summaryPane = document.getElementById("summary");
+  if (summaryTabBtn && summaryPane) {
+    const activeBtn = document.querySelector("#mortgageTabs .nav-link.active");
+    const activePane = document.querySelector(
+      "#mortgageTabsContent .tab-pane.show.active"
+    );
+    if (activeBtn && activeBtn !== summaryTabBtn)
+      activeBtn.classList.remove("active");
+    if (activePane && activePane !== summaryPane)
+      activePane.classList.remove("show", "active");
+    summaryTabBtn.classList.add("active");
+    summaryPane.classList.add("show", "active");
+  }
+  setTimeout(() => {
+    try {
+      if (typeof tabsSectionEl.scrollIntoView === "function") {
+        tabsSectionEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    } catch (_) {}
+  }, 50);
 }
 
 // Render amortization and balance charts for visualization tab

@@ -218,6 +218,7 @@
                   </div>
                 </div>
               </form>
+              
             </div>
 
             <!-- Comparison Tab -->
@@ -745,6 +746,10 @@
                     <button type="button" id="exportHelocReportBtn" class="btn btn-success">Export Report</button>
                   </div>
                 </div>
+                <!-- Inline validation summary (aria-live) for HELOC inputs: populated dynamically -->
+                <div class="mb-2" id="helocValidationSummaryWrapper">
+                  <div id="helocValidationSummary" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+                </div>
               </form>
             </div>
         
@@ -756,120 +761,87 @@
       
       <!-- Payment Summary Column -->
       <div class="col-lg-4">
-        <!-- Results Summary Section -->
+        <!-- Container that will toggle between generic payment summary and HELOC metrics -->
         <section id="resultsSummary" class="results-section mb-2 fade-in-up" style="display: block; margin-top: 0;">
-          <div class="card">
+          <!-- Generic (Non-HELOC) Payment Summary Card -->
+          <div id="genericPaymentSummaryCard" class="card">
             <div class="card-header text-white" style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%) !important;">
               <h6 class="mb-0" style="font-size: 0.9rem;">Payment Summary</h6>
             </div>
             <div class="card-body">
-              <!-- Two column grid layout for right panel -->
               <div class="row">
                 <div class="col-6">
-                  <div class="result-item">
-                    <h6>Monthly Payment</h6>
-                    <p id="monthlyPayment" class="result-value">$0</p>
-                  </div>
+                  <div class="result-item"><h6>Monthly Payment</h6><p id="monthlyPayment" class="result-value">$0</p></div>
                 </div>
                 <div class="col-6">
-                  <div class="result-item">
-                    <h6>Loan Amount</h6>
-                    <p id="loanAmount" class="result-value">$0</p>
-                  </div>
+                  <div class="result-item"><h6>Loan Amount</h6><p id="loanAmount" class="result-value">$0</p></div>
                 </div>
               </div>
               <div class="row">
                 <div class="col-12">
-                  <div class="result-item">
-                    <h6>Base Monthly Payment (no extra)</h6>
-                    <p id="baseMonthlyPayment" class="result-value">$0</p>
-                  </div>
+                  <div class="result-item"><h6>Base Monthly Payment (no extra)</h6><p id="baseMonthlyPayment" class="result-value">$0</p></div>
                 </div>
               </div>
               <div class="row" id="refiCostsInfoRow" style="display: none;">
-                <div class="col-12">
-                  <div class="result-item">
-                    <h6>Closing Costs & Points</h6>
-                    <p id="refiCostsInfo" class="result-value">—</p>
-                  </div>
-                </div>
+                <div class="col-12"><div class="result-item"><h6>Closing Costs & Points</h6><p id="refiCostsInfo" class="result-value">—</p></div></div>
               </div>
               <div class="row">
-                <div class="col-6">
-                  <div class="result-item">
-                    <h6>Total Interest</h6>
-                    <p id="totalInterest" class="result-value">$0</p>
-                  </div>
-                </div>
-                <div class="col-6">
-                  <div class="result-item">
-                    <h6>Principal & Interest</h6>
-                    <p id="principalInterest" class="result-value">$0</p>
-                  </div>
-                </div>
+                <div class="col-6"><div class="result-item"><h6>Total Interest</h6><p id="totalInterest" class="result-value">$0</p></div></div>
+                <div class="col-6"><div class="result-item"><h6>Principal & Interest</h6><p id="principalInterest" class="result-value">$0</p></div></div>
               </div>
               <div class="row">
-                <div class="col-6">
-                  <div class="result-item">
-                    <h6>Property Tax</h6>
-                    <p id="propertyTaxAmount" class="result-value">$0</p>
-                  </div>
-                </div>
-                <div class="col-6">
-                  <div class="result-item">
-                    <h6>Home Insurance</h6>
-                    <p id="insuranceAmount" class="result-value">$0</p>
-                  </div>
-                </div>
+                <div class="col-6"><div class="result-item"><h6>Property Tax</h6><p id="propertyTaxAmount" class="result-value">$0</p></div></div>
+                <div class="col-6"><div class="result-item"><h6>Home Insurance</h6><p id="insuranceAmount" class="result-value">$0</p></div></div>
               </div>
               <div class="row">
-                <div class="col-12" id="hoaSummarySection">
-                  <div class="result-item" data-bs-toggle="tooltip" data-bs-placement="top" title="HOA/Other dues are included in totals.">
-                    <h6>HOA/Other</h6>
-                    <p id="hoaAmount" class="result-value">$0</p>
-                  </div>
-                </div>
+                <div class="col-12" id="hoaSummarySection"><div class="result-item" data-bs-toggle="tooltip" data-bs-placement="top" title="HOA/Other dues are included in totals."><h6>HOA/Other</h6><p id="hoaAmount" class="result-value">$0</p></div></div>
               </div>
               <div class="row">
-                <div class="col-6">
-                  <div class="result-item">
-                    <h6>PMI</h6>
-                    <p id="pmiAmount" class="result-value">$0</p>
-                  </div>
-                </div>
-                <div class="col-6">
-                  <div class="result-item">
-                    <h6>Extra Payment</h6>
-                    <p id="extraAmount" class="result-value">$0</p>
-                  </div>
-                </div>
+                <div class="col-6"><div class="result-item"><h6>PMI</h6><p id="pmiAmount" class="result-value">$0</p></div></div>
+                <div class="col-6"><div class="result-item"><h6>Extra Payment</h6><p id="extraAmount" class="result-value">$0</p></div></div>
               </div>
               <div class="row">
-                <div class="col-12">
-                  <div class="result-item">
-                    <h6>Total Cost</h6>
-                    <p id="totalCost" class="result-value">$0</p>
-                  </div>
-                </div>
+                <div class="col-12"><div class="result-item"><h6>Total Cost</h6><p id="totalCost" class="result-value">$0</p></div></div>
               </div>
               <div class="row" id="extraMetricsRow" style="display:none;">
-                <div class="col-12">
-                  <div class="result-item">
-                    <h6>Interest Saved (Extra)</h6>
-                    <p id="interestSavedExtra" class="result-value">—</p>
-                  </div>
-                </div>
+                <div class="col-12"><div class="result-item"><h6>Interest Saved (Extra)</h6><p id="interestSavedExtra" class="result-value">—</p></div></div>
               </div>
               <div class="row" id="monthsSavedRow" style="display:none;">
-                <div class="col-12">
-                  <div class="result-item">
-                    <h6>Payoff Accelerated</h6>
-                    <p id="monthsSavedExtra" class="result-value">—</p>
-                  </div>
-                </div>
+                <div class="col-12"><div class="result-item"><h6>Payoff Accelerated</h6><p id="monthsSavedExtra" class="result-value">—</p></div></div>
               </div>
-        </div>
-        </div>
+            </div>
+          </div>
+
+          <!-- HELOC Metrics Card (shown when HELOC calculations displayed) -->
+          <div id="helocMetricsPanel" class="card mt-0" style="display:none;">
+            <div class="card-header text-white" style="background: linear-gradient(135deg, #6d28d9 0%, #9333ea 100%) !important;">
+              <h6 class="mb-0" style="font-size:0.9rem;">HELOC Key Metrics</h6>
+            </div>
+            <div class="card-body">
+              <div class="row mb-2">
+                <div class="col-6"><div class="result-item small"><h6 class="mb-1">Combined LTV</h6><p id="helocMetricCombinedLtv" class="result-value mb-0">—</p></div></div>
+                <div class="col-6"><div class="result-item small"><h6 class="mb-1">Available Equity (Pre)</h6><p id="helocMetricAvailableEquity" class="result-value mb-0">—</p></div></div>
+              </div>
+              <div class="row mb-2">
+                <div class="col-6"><div class="result-item small" data-bs-toggle="tooltip" title="Equity remaining after full assumed draw"><h6 class="mb-1">Remaining Equity</h6><p id="helocMetricPostDrawEquity" class="result-value mb-0">—</p></div></div>
+                <div class="col-6"><div class="result-item small"><h6 class="mb-1">Interest-Only Paymt</h6><p id="helocMetricInterestOnlyPayment" class="result-value mb-0">—</p></div></div>
+              </div>
+              <div class="row mb-2">
+                <div class="col-6"><div class="result-item small"><h6 class="mb-1">Repayment Payment</h6><p id="helocMetricRepaymentPayment" class="result-value mb-0">—</p></div></div>
+                <div class="col-6"><div class="result-item small"><h6 class="mb-1">Total Interest</h6><p id="helocMetricTotalInterest" class="result-value mb-0">—</p></div></div>
+              </div>
+              <div class="row mb-2">
+                <div class="col-6"><div class="result-item small"><h6 class="mb-1">Draw Interest</h6><p id="helocMetricDrawInterest" class="result-value mb-0">—</p></div></div>
+                <div class="col-6"><div class="result-item small"><h6 class="mb-1">Repay Interest</h6><p id="helocMetricRepayInterest" class="result-value mb-0">—</p></div></div>
+              </div>
+              <div class="row mb-2">
+                <div class="col-12"><div class="result-item small"><h6 class="mb-1">Payoff Date</h6><p id="helocMetricPayoffDate" class="result-value mb-0">—</p></div></div>
+              </div>
+              <div class="row" id="helocLtvWarningRow" style="display:none;">
+                <div class="col-12"><div class="alert alert-warning py-1 px-2 mb-0" id="helocLtvWarningMsg" style="font-size:0.75rem;">High LTV Warning</div></div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <!-- Blended Mortgage Summary Section -->
