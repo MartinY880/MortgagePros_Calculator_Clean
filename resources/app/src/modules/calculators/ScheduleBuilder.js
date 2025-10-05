@@ -305,4 +305,139 @@ function buildFixedLoanSchedule(loanData) {
   };
 }
 
-module.exports = { buildFixedLoanSchedule };
+/**
+ * buildHelocTwoPhaseSchedule
+ * Creates a two‑phase (interest‑only then principal & interest) HELOC style schedule.
+ * Mirrors existing legacy generateHelocAmortizationSchedule output shape to allow
+ * incremental migration. Adds non‑enumerable _meta.phaseTotals like fixed schedule uses.
+ *
+ * @param {Object} params
+ * @param {number} params.principal Total drawn amount (assumes fully drawn at start)
+ * @param {number} params.annualRate Nominal annual percentage rate (e.g. 7.25)
+ * @param {number} params.drawYears Interest‑only years
+ * @param {number} params.totalYears Total loan years including draw period
+ * @param {Object} [options]
+ * @param {Date}   [options.startDate] Optional start date (defaults: first of next month)
+ * @param {function} [options.onBalanceClamp] Callback when residual balance clamped to zero
+ * @param {boolean} [options.accumulate=true] Attach _meta.phaseTotals if true
+ * @param {number}  [options.repaymentMonthsOverride] Explicit repayment months (post draw)
+ * @returns {Array<Object>} schedule rows
+ */
+function buildHelocTwoPhaseSchedule(params, options = {}) {
+  const { principal, annualRate, drawYears, totalYears } = params;
+  const {
+    startDate = null,
+    onBalanceClamp = () => {},
+    accumulate = true,
+    repaymentMonthsOverride,
+  } = options;
+
+  const schedule = [];
+  if (!principal || principal <= 0 || !drawYears || !totalYears)
+    return schedule;
+  const interestOnlyMonths = drawYears * 12;
+  const rawRepayMonths = (totalYears - drawYears) * 12;
+  const repaymentMonths =
+    typeof repaymentMonthsOverride === "number" && repaymentMonthsOverride > 0
+      ? repaymentMonthsOverride
+      : rawRepayMonths;
+
+  const monthlyRate = annualRate / 100 / 12;
+  let balance = principal;
+  let cumulativePrincipal = 0;
+  let cumulativeInterest = 0;
+  const phaseTotals = {
+    interestOnly: { principal: 0, interest: 0, payments: 0 },
+    repayment: { principal: 0, interest: 0, payments: 0 },
+  };
+
+  // Establish base date (first of next month if no explicit)
+  let baseDate;
+  if (startDate instanceof Date && !isNaN(startDate)) {
+    baseDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  } else {
+    const now = new Date();
+    baseDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  }
+
+  const interestOnlyPayment = monthlyRate === 0 ? 0 : principal * monthlyRate;
+  for (let i = 1; i <= interestOnlyMonths; i++) {
+    const paymentDate = new Date(
+      baseDate.getFullYear(),
+      baseDate.getMonth() + (i - 1),
+      1
+    );
+    const interestPayment = interestOnlyPayment;
+    cumulativeInterest += interestPayment;
+    phaseTotals.interestOnly.interest += interestPayment;
+    phaseTotals.interestOnly.payments += interestPayment;
+    schedule.push({
+      paymentNumber: i,
+      paymentDate,
+      payment: interestOnlyPayment,
+      principalPayment: 0,
+      interestPayment,
+      balance: balance,
+      phase: "Interest-Only",
+      cumulativePrincipal,
+      cumulativeInterest,
+    });
+  }
+
+  if (repaymentMonths > 0) {
+    let repaymentPI;
+    if (monthlyRate === 0) {
+      repaymentPI = principal / repaymentMonths; // linear principal only
+    } else {
+      repaymentPI =
+        (balance * (monthlyRate * Math.pow(1 + monthlyRate, repaymentMonths))) /
+        (Math.pow(1 + monthlyRate, repaymentMonths) - 1);
+    }
+    for (let m = 1; m <= repaymentMonths && balance > 0.0001; m++) {
+      const paymentNumber = interestOnlyMonths + m;
+      const paymentDate = new Date(
+        baseDate.getFullYear(),
+        baseDate.getMonth() + (paymentNumber - 1),
+        1
+      );
+      const interestPayment = monthlyRate === 0 ? 0 : balance * monthlyRate;
+      let principalPayment =
+        monthlyRate === 0
+          ? Math.min(repaymentPI, balance)
+          : Math.min(repaymentPI - interestPayment, balance);
+      balance -= principalPayment;
+      if (balance !== 0 && Math.abs(balance) < 0.005) {
+        balance = 0;
+        onBalanceClamp();
+      }
+      cumulativePrincipal += principalPayment;
+      cumulativeInterest += interestPayment;
+      phaseTotals.repayment.principal += principalPayment;
+      phaseTotals.repayment.interest += interestPayment;
+      phaseTotals.repayment.payments += repaymentPI;
+      schedule.push({
+        paymentNumber,
+        paymentDate,
+        payment: repaymentPI,
+        principalPayment,
+        interestPayment,
+        balance,
+        phase: "Principal & Interest",
+        cumulativePrincipal,
+        cumulativeInterest,
+      });
+    }
+  }
+
+  if (accumulate) {
+    Object.defineProperty(schedule, "_meta", {
+      value: { phaseTotals },
+      enumerable: false,
+      configurable: false,
+      writable: false,
+    });
+  }
+  return schedule;
+}
+
+module.exports = { buildFixedLoanSchedule, buildHelocTwoPhaseSchedule };

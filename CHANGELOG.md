@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- HELOC two-phase engine integration via `buildHelocTwoPhaseSchedule` with parity fallback (legacy generator slated for removal once extended edge coverage lands).
+- Pure logic module `HelocCalculator` exposing `computeHelocAnalysis` (structured outputs: payments, schedule, totals, LTV, edgeFlags, warnings).
+- Edge flags (`zeroInterest`, `repaymentMonthsAdjusted`, `balanceClamped`, `roundingAdjusted`) and ordered warning messages (LTV thresholds, zero-interest, auto-adjust, rounding fold).
+- Phase interest split metrics: `totalInterestDrawPhase`, `totalInterestRepayPhase` consumed by PDF/CSV exporters.
+- README section documenting HELOC assumptions, data contract & future roadmap.
+
+### Changed
+
+- Rounding: sub-cent final principal payment now merged into penultimate amortizing row to produce cleaner terminal balance (flagged by `roundingAdjusted`).
+- Auto-extension of repayment phase: when total term equals draw period an extra 12 months appended (flag `repaymentMonthsAdjusted`) replacing previous hard error.
+
+### Fixed
+
+- Final residual balance (< $0.005) now deterministically clamped and flagged (`balanceClamped`) preventing negative drifts in exports.
+- Zero-interest schedules now produce linear principal amortization instead of division by zero risk path.
+
+### Documentation
+
+- Enhanced JSDoc typedefs for HELOC inputs, schedule rows, totals, edge flags, and analysis return structure.
+- Changelog now tracks HELOC refactor separate from unified purchase/refinance engine work.
+
+### Internal
+
+- Parity test ensures engine fidelity vs legacy schedule (temporary safety net).
+- Additional test scaffolding planned: rounding adjustment explicit trigger & balance clamp scenario.
+
 ## v16.3.0 (October 2025)
 
 ### Added

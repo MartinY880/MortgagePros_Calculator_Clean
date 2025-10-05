@@ -444,82 +444,207 @@ class ReportExporter {
    * @param {Object} data - HELOC calculation data
    */
   addHELOCContent(doc, data) {
+    // Bridge: prefer normalized helocResult shape if provided
+    const normalized =
+      data && (data.helocResult || data.result || window.helocResult);
+    const inputs = normalized?.inputs || data;
+    const results = normalized || data.results || {};
+    const paymentSection = {
+      interestOnlyPayment:
+        results.interestOnlyPayment ||
+        results.payments?.interestOnly ||
+        data?.results?.interestOnlyPayment ||
+        0,
+      principalInterestPayment:
+        results.principalInterestPayment ||
+        results.payments?.repayment ||
+        data?.results?.principalInterestPayment ||
+        0,
+      totalInterest:
+        results.totalInterest ||
+        results.totals?.totalInterest ||
+        data?.results?.totalInterest ||
+        0,
+      combinedLTV:
+        results.combinedLTV ||
+        results.ltv?.combined ||
+        data?.results?.combinedLTV ||
+        0,
+      availableEquity:
+        results.availableEquity ||
+        results.equity?.available ||
+        data?.results?.availableEquity ||
+        0,
+    };
     let yPos = 70;
-
-    // HELOC Details
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.text("HELOC Details", 15, yPos);
     yPos += 10;
-
     doc.setFontSize(11);
     doc.setFont("helvetica", "normal");
-
     const helocDetails = [
-      ["Home Value:", window.NumberFormatter.formatCurrency(data.homeValue)],
+      [
+        "Home Value:",
+        window.NumberFormatter.formatCurrency(
+          inputs?.homeValue || data.homeValue || 0
+        ),
+      ],
       [
         "Current Mortgage Balance:",
-        window.NumberFormatter.formatCurrency(data.mortgageBalance),
+        window.NumberFormatter.formatCurrency(
+          inputs?.mortgageBalance || data.mortgageBalance || 0
+        ),
       ],
       [
         "Available Equity:",
-        window.NumberFormatter.formatCurrency(data.results.availableEquity),
+        window.NumberFormatter.formatCurrency(paymentSection.availableEquity),
       ],
       [
         "Credit Limit:",
-        window.NumberFormatter.formatCurrency(data.creditLimit),
+        window.NumberFormatter.formatCurrency(
+          inputs?.creditLimit ||
+            data.creditLimit ||
+            inputs?.principal ||
+            results.principal ||
+            0
+        ),
       ],
       [
         "Interest Rate:",
-        window.NumberFormatter.formatPercentage(data.interestRate),
+        window.NumberFormatter.formatPercentage(
+          inputs?.interestRate || data.interestRate || 0
+        ),
       ],
-      ["Draw Period:", `${data.drawPeriod} years`],
-      ["Repayment Period:", `${data.repaymentPeriod} years`],
+      ["Draw Period:", `${inputs?.drawPeriod || data.drawPeriod || 0} years`],
+      [
+        "Repayment Period:",
+        `${inputs?.repaymentPeriod || data.repaymentPeriod || 0} years`,
+      ],
     ];
-
-    helocDetails.forEach(([label, value]) => {
-      doc.text(label, 20, yPos);
-      doc.text(value, 120, yPos);
+    helocDetails.forEach(([l, v]) => {
+      doc.text(l, 20, yPos);
+      doc.text(v, 120, yPos);
       yPos += 8;
     });
-
     yPos += 10;
-
-    // Payment Information
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.text("Payment Information", 15, yPos);
     yPos += 10;
-
     doc.setFontSize(11);
     doc.setFont("helvetica", "normal");
-
     const paymentInfo = [
       [
         "Interest-Only Payment (Draw Period):",
-        window.NumberFormatter.formatCurrency(data.results.interestOnlyPayment),
+        window.NumberFormatter.formatCurrency(
+          paymentSection.interestOnlyPayment
+        ),
       ],
       [
         "Principal & Interest Payment (Repayment):",
         window.NumberFormatter.formatCurrency(
-          data.results.principalInterestPayment
+          paymentSection.principalInterestPayment
         ),
       ],
       [
         "Total Interest (If Fully Drawn):",
-        window.NumberFormatter.formatCurrency(data.results.totalInterest),
+        window.NumberFormatter.formatCurrency(paymentSection.totalInterest),
       ],
       [
         "Combined LTV Ratio:",
-        window.NumberFormatter.formatPercentage(data.results.combinedLTV),
+        window.NumberFormatter.formatPercentage(paymentSection.combinedLTV),
       ],
     ];
-
-    paymentInfo.forEach(([label, value]) => {
-      doc.text(label, 20, yPos);
-      doc.text(value, 120, yPos);
+    paymentInfo.forEach(([l, v]) => {
+      doc.text(l, 20, yPos);
+      doc.text(v, 120, yPos);
       yPos += 8;
     });
+
+    // Phase Breakdown Section
+    // Attempt to get phase totals from normalized structure first
+    let phaseTotals =
+      normalized?.phaseTotals || normalized?.scheduleMeta?.phaseTotals;
+    const schedule =
+      normalized?.schedule || data.schedule || data.amortizationData;
+
+    // Fallback: derive if not present and schedule available
+    if (!phaseTotals && Array.isArray(schedule)) {
+      const derived = {
+        interestOnly: { principal: 0, interest: 0, payments: 0 },
+        repayment: { principal: 0, interest: 0, payments: 0 },
+      };
+      schedule.forEach((r) => {
+        const phase = r.phase || (r.isInterestOnly ? "Draw" : "Repay");
+        if (phase.toLowerCase().startsWith("draw")) {
+          derived.interestOnly.interest += r.interestPayment || r.interest || 0;
+          derived.interestOnly.payments += r.payment || r.totalPayment || 0;
+          // principal expected 0 in draw
+        } else {
+          derived.repayment.principal += r.principalPayment || r.principal || 0;
+          derived.repayment.interest += r.interestPayment || r.interest || 0;
+          derived.repayment.payments += r.payment || r.totalPayment || 0;
+        }
+      });
+      phaseTotals = derived;
+    }
+
+    if (phaseTotals) {
+      yPos += 6;
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text("Phase Breakdown", 15, yPos);
+      yPos += 10;
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "normal");
+
+      const drawInterest = phaseTotals.interestOnly?.interest || 0;
+      const repayInterest = phaseTotals.repayment?.interest || 0;
+      const totalInterestAll =
+        drawInterest + repayInterest || paymentSection.totalInterest;
+      const repayPrincipal =
+        phaseTotals.repayment?.principal || normalized?.principal || 0;
+
+      const pct = (part, whole) =>
+        whole > 0 ? `${((part / whole) * 100).toFixed(1)}%` : "0.0%";
+
+      const rows = [
+        [
+          "Draw Phase Interest:",
+          window.NumberFormatter.formatCurrency(drawInterest),
+          pct(drawInterest, totalInterestAll),
+        ],
+        [
+          "Repay Phase Interest:",
+          window.NumberFormatter.formatCurrency(repayInterest),
+          pct(repayInterest, totalInterestAll),
+        ],
+        [
+          "Total Interest:",
+          window.NumberFormatter.formatCurrency(totalInterestAll),
+          "100%",
+        ],
+        [
+          "Principal Repaid (Repay Phase):",
+          window.NumberFormatter.formatCurrency(repayPrincipal),
+          "—",
+        ],
+      ];
+
+      // Column headers
+      doc.text("Metric", 20, yPos);
+      doc.text("Amount", 120, yPos);
+      doc.text("% of Total Interest", 170, yPos);
+      yPos += 8;
+
+      rows.forEach(([label, amount, percent]) => {
+        doc.text(label, 20, yPos);
+        doc.text(amount, 120, yPos);
+        if (percent) doc.text(percent, 170, yPos);
+        yPos += 8;
+      });
+    }
   }
 
   /**
@@ -1140,19 +1265,79 @@ class ReportExporter {
    * @returns {string} CSV content
    */
   generateHELOCCSV(data) {
+    // Prefer normalized helocResult structure if present
+    const heloc = data.helocResult || data.result || data;
+    const schedule = heloc.schedule || data.schedule || data.amortizationData;
+
+    if (Array.isArray(schedule) && schedule.length) {
+      // Detailed schedule export with new columns
+      const header = [
+        "Payment #",
+        "Payment Date",
+        "Phase",
+        "Payment Amount",
+        "Principal",
+        "Interest",
+        "Balance",
+        "Cumulative Principal",
+        "Cumulative Interest",
+      ];
+      const rows = [header];
+      schedule.forEach((r) => {
+        const dateObj =
+          r.paymentDate instanceof Date ? r.paymentDate : r.date || null;
+        const dateStr = dateObj
+          ? `${(dateObj.getMonth() + 1)
+              .toString()
+              .padStart(2, "0")}/${dateObj.getFullYear()}`
+          : "";
+        rows.push([
+          r.paymentNumber || r.number || "",
+          dateStr,
+          r.phase || (r.isInterestOnly ? "Draw" : "Repay") || "",
+          (r.payment ?? r.totalPayment ?? 0).toFixed(2),
+          (r.principalPayment ?? r.principal ?? 0).toFixed(2),
+          (r.interestPayment ?? r.interest ?? 0).toFixed(2),
+          (r.balance ?? r.remainingBalance ?? 0).toFixed(2),
+          (r.cumulativePrincipal ?? 0).toFixed(2),
+          (r.cumulativeInterest ?? 0).toFixed(2),
+        ]);
+      });
+      return rows.map((row) => row.join(",")).join("\n");
+    }
+
+    // Fallback summary (legacy behavior)
     const rows = [
       ["Field", "Value"],
       ["Home Value", data.homeValue],
       ["Current Mortgage Balance", data.mortgageBalance],
-      ["Available Equity", data.results.availableEquity],
-      ["Credit Limit", data.creditLimit],
-      ["Interest Rate (%)", data.interestRate],
-      ["Draw Period (years)", data.drawPeriod],
-      ["Repayment Period (years)", data.repaymentPeriod],
-      ["Interest-Only Payment", data.results.interestOnlyPayment],
-      ["P&I Payment (Repayment)", data.results.principalInterestPayment],
-      ["Total Interest (If Fully Drawn)", data.results.totalInterest],
-      ["Combined LTV Ratio (%)", data.results.combinedLTV],
+      [
+        "Available Equity",
+        data.results?.availableEquity || heloc.equity?.available,
+      ],
+      ["Credit Limit", data.creditLimit || heloc.inputs?.creditLimit],
+      ["Interest Rate (%)", data.interestRate || heloc.inputs?.interestRate],
+      ["Draw Period (years)", data.drawPeriod || heloc.inputs?.drawPeriod],
+      [
+        "Repayment Period (years)",
+        data.repaymentPeriod || heloc.inputs?.repaymentPeriod,
+      ],
+      [
+        "Interest-Only Payment",
+        data.results?.interestOnlyPayment || heloc.payments?.interestOnly,
+      ],
+      [
+        "P&I Payment (Repayment)",
+        data.results?.principalInterestPayment || heloc.payments?.repayment,
+      ],
+      [
+        "Total Interest (If Fully Drawn)",
+        data.results?.totalInterest || heloc.totals?.totalInterest,
+      ],
+      [
+        "Combined LTV Ratio (%)",
+        data.results?.combinedLTV || heloc.ltv?.combined,
+      ],
     ];
 
     return rows.map((row) => row.join(",")).join("\n");

@@ -302,6 +302,72 @@ These are implemented at the UI layer but calculation outcomes are validated by 
 
 ---
 
+### HELOC Module (New Unified Two-Phase Engine)
+
+The HELOC tab now uses a dedicated pure logic module: `modules/calculators/HelocCalculator.js` backed by the unified schedule builder (`buildHelocTwoPhaseSchedule`). This replaces scattered inline math with a deterministic two‑phase (Interest‑Only → Principal & Interest) schedule.
+
+Key assumptions (current release):
+
+- Full credit line is drawn at inception (no progressive draw modeling yet).
+- Interest-only phase accrues interest on the full principal; principal does not decline until repayment phase.
+- If total term years equals draw period years, repayment period is auto-extended by 12 months (edge flag `repaymentMonthsAdjusted`).
+- Zero interest rate produces linear principal amortization (flag `zeroInterest`).
+
+Returned analysis object shape (`computeHelocAnalysis`):
+
+```
+{
+	inputs: { propertyValue, outstandingBalance, helocAmount, interestRate, drawPeriodYears, totalTermYears },
+	payments: { interestOnlyPayment, principalInterestPayment },
+	schedule: [ { monthIndex, phase, payment, interestPayment, principalPayment, balance, cumulativeInterest, cumulativePrincipal, paymentDate } ... ],
+	totals: { totalInterest, totalInterestDrawPhase, totalInterestRepayPhase },
+	ltv: { availableEquity, combinedLTV },
+	edgeFlags: { zeroInterest, repaymentMonthsAdjusted, balanceClamped, roundingAdjusted },
+	warnings: string[],
+	payoffDate: Date | null,
+	repaymentMonths: number
+}
+```
+
+Edge flags:
+
+- `zeroInterest` – monthlyRate == 0 fallback path.
+- `repaymentMonthsAdjusted` – automatic +12 month extension to ensure amortization.
+- `balanceClamped` – final residual (|balance| < $0.005) forced to 0 inside engine callback.
+- `roundingAdjusted` – sub‑cent final principal row merged into previous row.
+
+Warnings emitted (context aware):
+
+- High Combined LTV (≥90% and <100%).
+- LTV Exceeds Limit (≥100%).
+- Zero interest linear amortization notice.
+- Repayment auto-adjust notice.
+- Rounding adjustment notice (if applied).
+
+Rounding Strategy:
+
+- Monetary math primarily in raw floats; UI/export layers format.
+- Final row fold: if last principal payment < $0.01 it is merged into penultimate row to guarantee schedule ends cleanly at zero balance.
+
+Exporter Integration:
+
+- PDF phase breakdown now shows draw vs repayment interest splits using `totals.totalInterestDrawPhase` and `totals.totalInterestRepayPhase`.
+- CSV includes phase column plus cumulative principal & interest columns for each row.
+
+Future roadmap (not yet implemented):
+
+- Progressive / staged draw modeling (monthly draw schedule or utilization curve).
+- Variable rate (index + margin with caps) simulation.
+- Effective blended APR / cost-of-funds metric.
+- Scenario comparison: HELOC vs Cash-Out Refi side-by-side.
+
+Testing:
+
+- Parity test ensured new engine output matches legacy generator (legacy slated for removal after extended edge coverage).
+- Unit tests cover zero-interest, repayment period adjustment, schedule integrity, and high-LTV boundaries.
+
+---
+
 ---
 
 <div align="center">

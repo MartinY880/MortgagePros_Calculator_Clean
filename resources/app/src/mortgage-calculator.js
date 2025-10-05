@@ -2654,53 +2654,83 @@ function calculateHELOC() {
     }
   }
 
-  // Interest-only payment (zero if zero-rate)
-  let interestOnlyPayment = helocAmount * monthlyRate;
-  if (monthlyRate === 0) {
-    interestOnlyPayment = 0;
-  }
-
-  // Principal & interest payment in repayment phase
-  let principalInterestPayment = 0;
-  if (monthlyRate === 0) {
-    // Linear amortization when zero interest
-    principalInterestPayment = helocAmount / repaymentMonths;
-    edgeFlags.zeroInterest = true;
-    messages.push(
-      "Zero interest rate: repayment will be linear principal amortization."
-    );
-  } else if (repaymentMonths > 0) {
-    principalInterestPayment =
-      (helocAmount *
-        (monthlyRate * Math.pow(1 + monthlyRate, repaymentMonths))) /
-      (Math.pow(1 + monthlyRate, repaymentMonths) - 1);
-  }
-
-  // Generate HELOC amortization schedule
-  // Optional future start date input (if field exists) else default to first of next month
+  // Determine optional start date (first of next month fallback)
   let startDate = null;
   const startDateEl = document.getElementById("helocStartDate");
   if (startDateEl && startDateEl.value) {
     const parsed = new Date(startDateEl.value);
     if (!isNaN(parsed)) startDate = parsed;
   }
-  const helocAmortization = generateHelocAmortizationSchedule(
-    helocAmount,
-    interestRate,
-    interestOnlyPeriod,
-    repaymentPeriod,
-    {
-      zeroInterest: monthlyRate === 0,
-      repaymentMonthsOverride: repaymentMonths,
-      onBalanceClamp: () => {
-        edgeFlags.balanceClamped = true;
-      },
+
+  // New HelocCalculator integration (Task 21) with guarded fallback
+  let helocAnalysis;
+  try {
+    const {
+      computeHelocAnalysis,
+    } = require("./modules/calculators/HelocCalculator");
+    helocAnalysis = computeHelocAnalysis({
+      propertyValue,
+      outstandingBalance: isNaN(outstandingBalance) ? 0 : outstandingBalance,
+      helocAmount,
+      interestRate,
+      drawPeriodYears: interestOnlyPeriod,
+      totalTermYears: repaymentPeriod,
       startDate,
-      accumulate: true,
+    });
+  } catch (calcErr) {
+    console.warn(
+      "[HelocCalculator] Fallback to legacy inline path:",
+      calcErr && calcErr.message ? calcErr.message : calcErr
+    );
+    // Legacy inline computations (previous logic retained)
+    let interestOnlyPayment = helocAmount * monthlyRate;
+    if (monthlyRate === 0) interestOnlyPayment = 0;
+    let principalInterestPayment = 0;
+    if (monthlyRate === 0) {
+      principalInterestPayment = helocAmount / repaymentMonths;
+      edgeFlags.zeroInterest = true;
+      messages.push(
+        "Zero interest rate: repayment will be linear principal amortization."
+      );
+    } else if (repaymentMonths > 0) {
+      principalInterestPayment =
+        (helocAmount *
+          (monthlyRate * Math.pow(1 + monthlyRate, repaymentMonths))) /
+        (Math.pow(1 + monthlyRate, repaymentMonths) - 1);
     }
-  );
+    const helocAmortization = generateHelocAmortizationSchedule(
+      helocAmount,
+      interestRate,
+      interestOnlyPeriod,
+      repaymentPeriod,
+      {
+        zeroInterest: monthlyRate === 0,
+        repaymentMonthsOverride: repaymentMonths,
+        onBalanceClamp: () => {
+          edgeFlags.balanceClamped = true;
+        },
+        startDate,
+        accumulate: true,
+      }
+    );
+    helocAnalysis = {
+      payments: { interestOnlyPayment, principalInterestPayment },
+      schedule: helocAmortization,
+      totals: {
+        totalInterest: helocAmortization.reduce(
+          (s, p) => s + (p.interestPayment || 0),
+          0
+        ),
+      },
+      edgeFlags,
+      warnings: messages.slice(),
+      repaymentMonths,
+    };
+  }
 
   // Rounding adjustment: if final payment's principal < 0.01 *or* total balance already 0 but preceding row has tiny residual addition potential
+  const helocAmortization =
+    helocAnalysis && helocAnalysis.schedule ? helocAnalysis.schedule : [];
   if (helocAmortization.length > 2) {
     const last = helocAmortization[helocAmortization.length - 1];
     const penultimate = helocAmortization[helocAmortization.length - 2];
@@ -2786,9 +2816,10 @@ function calculateHELOC() {
     messages.push(rateWarning);
   }
 
-  // Determine payoff date (last schedule row date if present)
-  let payoffDate = null;
-  if (helocAmortization.length > 0) {
+  // Determine payoff date from analysis (fallback to schedule inspection)
+  let payoffDate =
+    helocAnalysis && helocAnalysis.payoffDate ? helocAnalysis.payoffDate : null;
+  if (!payoffDate && helocAmortization.length > 0) {
     const last = helocAmortization[helocAmortization.length - 1];
     payoffDate = last.paymentDate instanceof Date ? last.paymentDate : null;
   }
@@ -2796,8 +2827,12 @@ function calculateHELOC() {
   // Store results
   helocData.amortizationData = helocAmortization;
   helocData.calculationResults = [
-    interestOnlyPayment,
-    principalInterestPayment,
+    helocAnalysis.payments
+      ? helocAnalysis.payments.interestOnlyPayment
+      : undefined,
+    helocAnalysis.payments
+      ? helocAnalysis.payments.principalInterestPayment
+      : undefined,
     helocAmount,
     totalInterest,
     propertyValue,
@@ -2816,8 +2851,12 @@ function calculateHELOC() {
   }
   // New structured result (non-breaking; consumers can migrate gradually)
   helocData.result = {
-    interestOnlyPayment,
-    principalInterestPayment,
+    interestOnlyPayment: helocAnalysis.payments
+      ? helocAnalysis.payments.interestOnlyPayment
+      : undefined,
+    principalInterestPayment: helocAnalysis.payments
+      ? helocAnalysis.payments.principalInterestPayment
+      : undefined,
     principal: helocAmount,
     totalInterest,
     totalInterestDrawPhase,
@@ -2845,8 +2884,12 @@ function calculateHELOC() {
 
   // Update UI with HELOC results
   updateHelocResultsUI(
-    interestOnlyPayment,
-    principalInterestPayment,
+    helocAnalysis.payments
+      ? helocAnalysis.payments.interestOnlyPayment
+      : undefined,
+    helocAnalysis.payments
+      ? helocAnalysis.payments.principalInterestPayment
+      : undefined,
     helocAmount,
     totalInterest,
     propertyValue,
