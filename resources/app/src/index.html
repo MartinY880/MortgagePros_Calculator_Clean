@@ -580,13 +580,15 @@
               <div class="col-md-6">
                 <div class="form-group">
                   <label for="propertyValue">Property Value ($):<span class="required">*</span></label>
-                  <input type="text" inputmode="numeric" id="propertyValue" class="form-control" value="0">
+                  <input type="text" inputmode="numeric" pattern="[0-9,]*" aria-describedby="propertyValueHelp" id="propertyValue" class="form-control" value="0">
+                  <span id="propertyValueHelp" class="visually-hidden">Enter total purchase price in dollars.</span>
                 </div>
               </div>
               <div class="col-md-6">
                 <div class="form-group">
                   <label for="downPaymentAmount">Down Payment ($):<span class="required">*</span></label>
-                  <input type="text" inputmode="numeric" id="downPaymentAmount" class="form-control" value="0">
+                  <input type="text" inputmode="numeric" pattern="[0-9,]*" aria-describedby="downPaymentAmountHelp" id="downPaymentAmount" class="form-control" value="0">
+                  <span id="downPaymentAmountHelp" class="visually-hidden">Dollar amount you will pay upfront.</span>
                 </div>
               </div>
             </div>
@@ -595,13 +597,19 @@
               <div class="col-md-6">
                 <div class="form-group">
                   <label for="downPaymentPercent">Down Payment (%):<span class="required">*</span></label>
-                  <input type="text" inputmode="decimal" id="downPaymentPercent" class="form-control" value="0">
+                  <input type="text" inputmode="decimal" pattern="[0-9.,]*" aria-describedby="downPaymentPercentHelp" id="downPaymentPercent" class="form-control" value="0">
+                  <span id="downPaymentPercentHelp" class="visually-hidden">Percent of property value paid upfront.</span>
                 </div>
               </div>
               <div class="col-md-6">
                 <div class="form-group">
                   <label for="loanTerm">Loan Term (Years):<span class="required">*</span></label>
-                  <input type="text" inputmode="numeric" id="loanTerm" class="form-control" value="0">
+                  <input type="text" inputmode="numeric" pattern="[0-9]*" aria-describedby="loanTermHelp" id="loanTerm" class="form-control" value="0">
+                  <span id="loanTermHelp" class="visually-hidden">Loan length in years.</span>
+                  <div class="mt-2 small d-flex flex-wrap align-items-center gap-2" id="purchaseLtvWrap">
+                    <span id="purchaseLtvBadge" class="badge bg-secondary ltv-badge" title="Origination Loan-to-Value" aria-live="polite">LTV --%</span>
+                    <span id="purchasePmiStatus" class="badge bg-info text-dark pmi-status" title="PMI Status" aria-live="polite" aria-describedby="pmiStatusHelp">PMI Status Pending</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -610,13 +618,15 @@
               <div class="col-md-6">
                 <div class="form-group">
                   <label for="interestRate">Interest Rate (%):<span class="required">*</span></label>
-                  <input type="text" inputmode="decimal" id="interestRate" class="form-control" value="0">
+                  <input type="text" inputmode="decimal" pattern="[0-9.,]*" aria-describedby="interestRateHelp" id="interestRate" class="form-control" value="0">
+                  <span id="interestRateHelp" class="visually-hidden">Annual interest rate percentage.</span>
                 </div>
               </div>
               <div class="col-md-6">
                 <div class="form-group">
                   <label for="propertyTax">Property Tax (Monthly $):</label>
-                  <input type="text" inputmode="numeric" id="propertyTax" class="form-control" value="0">
+                  <input type="text" inputmode="numeric" pattern="[0-9,]*" id="propertyTax" class="form-control" value="0" aria-describedby="propertyTaxHelp">
+                  <span id="propertyTaxHelp" class="visually-hidden">Estimated monthly property tax dollars.</span>
                 </div>
               </div>
             </div>
@@ -625,13 +635,15 @@
               <div class="col-md-6">
                 <div class="form-group">
                   <label for="homeInsurance">Home Insurance (Monthly $):</label>
-                  <input type="text" inputmode="numeric" id="homeInsurance" class="form-control" value="0">
+                  <input type="text" inputmode="numeric" pattern="[0-9,]*" id="homeInsurance" class="form-control" value="0" aria-describedby="homeInsuranceHelp">
+                  <span id="homeInsuranceHelp" class="visually-hidden">Estimated monthly homeowners insurance dollars.</span>
                 </div>
               </div>
               <div class="col-md-6">
                 <div class="form-group">
                   <label for="hoa">Monthly HOA/Other ($):</label>
-                  <input type="text" inputmode="decimal" id="hoa" class="form-control" value="0">
+                  <input type="text" inputmode="decimal" pattern="[0-9.,]*" id="hoa" class="form-control" value="0" aria-describedby="hoaHelp">
+                  <span id="hoaHelp" class="visually-hidden">Monthly HOA or association dues dollars.</span>
                 </div>
               </div>
             </div>
@@ -640,20 +652,23 @@
               <div class="col-md-6">
                 <div class="form-group">
                   <label for="pmiRate">PMI Rate (%):</label>
-                  <input type="text" inputmode="decimal" id="pmiRate" class="form-control" value="0">
+                  <input type="text" inputmode="decimal" pattern="[0-9.,]*" id="pmiRate" class="form-control" value="0" aria-describedby="pmiRateHelp">
+                  <small id="pmiRateHelp" class="form-text text-muted">Annual PMI percentage. Charged monthly while LTV exceeds the selected rule; auto-drops when LTV reaches the rule threshold.</small>
                 </div>
                 <div class="form-group mt-2">
                   <label for="pmiEndRule">PMI Ends at:</label>
-                  <select id="pmiEndRule" class="form-select">
+                  <select id="pmiEndRule" class="form-select" aria-describedby="pmiStatusHelp">
                     <option value="80" selected>80% LTV</option>
                     <option value="78">78% LTV</option>
                   </select>
+                  <small class="form-text text-muted" id="pmiStatusHelp">Status updates automatically as you edit down payment, property value, or PMI inputs.</small>
                 </div>
               </div>
               <div class="col-md-6">
                 <div class="form-group">
                   <label for="extraPayment">Extra Monthly Payment ($):</label>
-                  <input type="text" inputmode="numeric" id="extraPayment" class="form-control" value="0">
+                  <input type="text" inputmode="numeric" pattern="[0-9,]*" id="extraPayment" class="form-control" value="0" aria-describedby="extraPaymentHelp">
+                  <small id="extraPaymentHelp" class="form-text text-muted">Applied directly to principal each month; reduces interest and payoff time.</small>
                 </div>
               </div>
             </div>
@@ -803,7 +818,7 @@
               </div>
               <div class="row">
                 <div class="col-12" id="hoaSummarySection">
-                  <div class="result-item">
+                  <div class="result-item" data-bs-toggle="tooltip" data-bs-placement="top" title="HOA/Other dues are included in totals.">
                     <h6>HOA/Other</h6>
                     <p id="hoaAmount" class="result-value">$0</p>
                   </div>
@@ -828,6 +843,22 @@
                   <div class="result-item">
                     <h6>Total Cost</h6>
                     <p id="totalCost" class="result-value">$0</p>
+                  </div>
+                </div>
+              </div>
+              <div class="row" id="extraMetricsRow" style="display:none;">
+                <div class="col-12">
+                  <div class="result-item">
+                    <h6>Interest Saved (Extra)</h6>
+                    <p id="interestSavedExtra" class="result-value">—</p>
+                  </div>
+                </div>
+              </div>
+              <div class="row" id="monthsSavedRow" style="display:none;">
+                <div class="col-12">
+                  <div class="result-item">
+                    <h6>Payoff Accelerated</h6>
+                    <p id="monthsSavedExtra" class="result-value">—</p>
                   </div>
                 </div>
               </div>
@@ -1074,7 +1105,7 @@
                 <div class="col-md-6">
                   <p><strong>Principal & Interest:</strong> <span id="summaryPI">$0.00</span></p>
                   <p><strong>Taxes & Insurance:</strong> <span id="summaryTI">$0.00</span></p>
-                  <p><strong>PMI:</strong> <span id="summaryPMI">$0.00</span></p>
+                  <p><strong>PMI:</strong> <span id="summaryPMI">$0.00</span> <span id="summaryPMITooltip" class="info-badge-inline" data-bs-toggle="tooltip" data-bs-placement="top" title="PMI details pending calculation" style="display:inline-block;cursor:help;">ℹ</span></p>
                   <p id="summaryPMIDropRow" style="display: none;"><strong>PMI Ends:</strong> <span id="summaryPMIDrop">—</span></p>
                 </div>
                 <div class="col-md-6">

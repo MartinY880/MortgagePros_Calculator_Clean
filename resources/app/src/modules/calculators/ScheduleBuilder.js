@@ -5,22 +5,62 @@
  *  - Extra monthly principal payments (acceleration)
  *  - Baseline (no-extra) counterfactual for interestSaved / monthsSaved
  *  - Consistent rounding (bank-style to 2 decimals) per Task 15
- *  - Escrow accumulation (tax + insurance) for totalOutOfPocket metric
+ *  - Escrow accumulation (tax + insurance + HOA) for totalOutOfPocket metric
  *
- * Input Shape (loanData):
- *  {
- *    amount,           // principal
- *    rate,             // annual interest % (number)
- *    term,             // years (integer)
- *    pmi,              // monthly PMI charge already adjusted by toggle
- *    propertyTax,      // monthly property tax
- *    homeInsurance,    // monthly insurance
- *    extra,            // monthly extra principal
- *    appraisedValue,   // property value for LTV
- *    pmiEndRule        // 80 or 78 (percentage) optional (defaults 80 if falsy)
- *  }
+ * PMI Semantics (pmiMeta.pmiEndsMonth):
+ *  - 1 => PMI never charged (not applicable at origination or zero loan)
+ *  - null => PMI would never end during modeled term (edge; not typical here)
+ *  - >1 => First PMI-FREE month (i.e. the month AFTER last PMI charge)
  *
- * Return object mirrors the legacy calculateSingleLoan output to avoid UI refactor.
+ * Rounding: Each month interest & principal are rounded, then adjusted so roundedInterest + roundedPrincipal == roundedMonthlyPI (within 0.01) to avoid balance drift.
+ *
+ * @typedef {Object} LoanInput
+ * @property {number} amount Principal loan amount (>=0)
+ * @property {number} rate Annual interest rate percent (e.g. 6 for 6%)
+ * @property {number} term Loan term in years (integer)
+ * @property {number} pmi Monthly PMI charge (already computed externally)
+ * @property {number} propertyTax Monthly property tax
+ * @property {number} homeInsurance Monthly insurance
+ * @property {number} [hoa=0] Monthly HOA dues
+ * @property {number} extra Extra principal payment applied every month
+ * @property {number} appraisedValue Property value for LTV calculations
+ * @property {number} [pmiEndRule=80] LTV threshold percentage (80 or 78)
+ *
+ * @typedef {Object} PmiMeta
+ * @property {number} pmiMonthlyInput Original monthly PMI input value
+ * @property {number|null} pmiEndsMonth First PMI-free month (1-based) or null if never ends
+ * @property {number} pmiTotalPaid Total PMI dollars paid
+ * @property {number} thresholdLTV Decimal LTV threshold (0.8 or 0.78)
+ *
+ * @typedef {Object} ExtraDeltas
+ * @property {number} interestSaved Interest saved vs baseline (no extra)
+ * @property {number} monthsSaved Months saved vs baseline (positive means faster payoff)
+ *
+ * @typedef {Object} PayoffTime
+ * @property {number} years Whole years part of payoff time
+ * @property {number} months Remaining months after years
+ * @property {number} totalMonths Total payoff months including acceleration
+ *
+ * @typedef {Object} ScheduleResult
+ * @property {number} monthlyPI Scheduled principal+interest payment (no escrow/PMI)
+ * @property {number} monthlyPropertyTax Monthly property tax
+ * @property {number} monthlyInsurance Monthly insurance
+ * @property {number} monthlyHOA Monthly HOA
+ * @property {number} monthlyPMIInput Raw PMI monthly input
+ * @property {number} totalMonthlyPayment First month total payment including PMI & escrow
+ * @property {number} baseMonthlyPaymentNoPMI Monthly payment minus PMI (escrow + P&I)
+ * @property {number} totalInterest Total interest paid (with extra payments)
+ * @property {number} totalCost Total principal + interest
+ * @property {Object} totals Aggregated cost categories (principal, interestPaid, pmiPaid, taxPaid, insurancePaid, hoaPaid, totalOutOfPocket, totalCostPI, totalCostFull)
+ * @property {PayoffTime} payoffTime Structured payoff timing
+ * @property {{interestPaid:number,payoffMonths:number}|null} baseline Baseline (no extra) results or null if no extra
+ * @property {ExtraDeltas|null} extraDeltas Savings deltas vs baseline or null
+ * @property {Object} calculations Internal calculation metadata
+ * @property {PmiMeta} pmiMeta PMI metadata block
+ * @property {LoanInput} amount Included original input echo for convenience
+ *
+ * @param {LoanInput} loanData
+ * @returns {ScheduleResult}
  */
 
 function buildFixedLoanSchedule(loanData) {
@@ -31,6 +71,7 @@ function buildFixedLoanSchedule(loanData) {
     pmi,
     propertyTax,
     homeInsurance,
+    hoa = 0, // NEW: monthly HOA dues
     extra,
     appraisedValue,
   } = loanData;
@@ -66,6 +107,7 @@ function buildFixedLoanSchedule(loanData) {
   let pmiEndsMonth = null; // first month WITHOUT PMI (1-based)
   let taxTotalPaid = 0;
   let insuranceTotalPaid = 0;
+  let hoaTotalPaid = 0;
 
   const roundCurrency = (v) => Math.round((v + Number.EPSILON) * 100) / 100;
 
@@ -100,6 +142,7 @@ function buildFixedLoanSchedule(loanData) {
     pmiTotalPaid += monthlyPMICharge;
     taxTotalPaid += monthlyPropertyTax;
     insuranceTotalPaid += homeInsurance;
+    hoaTotalPaid += hoa;
 
     let principalReduction = principalPayment + extra;
     if (principalReduction > balance) {
@@ -129,12 +172,21 @@ function buildFixedLoanSchedule(loanData) {
   }
 
   const initialMonthlyPayment =
-    monthlyPI + (pmiApplies ? pmi : 0) + monthlyPropertyTax + homeInsurance;
+    monthlyPI +
+    (pmiApplies ? pmi : 0) +
+    monthlyPropertyTax +
+    homeInsurance +
+    hoa;
   const baseMonthlyPaymentNoPMI =
-    monthlyPI + monthlyPropertyTax + homeInsurance;
+    monthlyPI + monthlyPropertyTax + homeInsurance + hoa;
   const totalCostPI = amount + totalInterest;
   const totalOutOfPocket =
-    amount + totalInterest + pmiTotalPaid + taxTotalPaid + insuranceTotalPaid;
+    amount +
+    totalInterest +
+    pmiTotalPaid +
+    taxTotalPaid +
+    insuranceTotalPaid +
+    hoaTotalPaid;
 
   // Baseline (no extra) simulation
   let baselineInterestPaid = null;
@@ -192,6 +244,7 @@ function buildFixedLoanSchedule(loanData) {
     monthlyPI,
     monthlyPropertyTax,
     monthlyInsurance: homeInsurance,
+    monthlyHOA: hoa,
     monthlyPMIInput: pmi,
     totalMonthlyPayment: initialMonthlyPayment,
     baseMonthlyPaymentNoPMI,
@@ -206,6 +259,7 @@ function buildFixedLoanSchedule(loanData) {
       totalOutOfPocket,
       totalCostPI,
       totalCostFull: totalOutOfPocket,
+      hoaPaid: hoaTotalPaid,
     },
     payoffTime: {
       years: payoffYears,

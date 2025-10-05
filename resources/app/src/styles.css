@@ -184,6 +184,42 @@ body {
   margin-bottom: 0;
 }
 
+/* HOA exclusion visual differentiation */
+.hoa-excluded {
+  position: relative;
+  border-left: 4px solid #888;
+  background: linear-gradient(
+    90deg,
+    rgba(120, 120, 120, 0.08),
+    rgba(120, 120, 120, 0)
+  );
+}
+.hoa-excluded h6 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}
+.hoa-excluded .info-badge-inline {
+  background: #6c757d;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 0.55rem;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Footnote helper if we later append an explanatory note */
+.hoa-excluded-footnote {
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #555;
+  margin-top: 2px;
+}
+
 .form-label,
 label {
   font-weight: var(--font-weight-semibold);

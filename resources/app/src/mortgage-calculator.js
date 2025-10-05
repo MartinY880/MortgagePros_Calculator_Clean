@@ -58,9 +58,43 @@ function showNotification(message, type = "danger") {
     hideNotification();
   }, 3000);
 
-  // Scroll to top to ensure visibility
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  // Scroll to top to ensure visibility (guard for test environments like jsdom)
+  try {
+    if (typeof window.scrollTo === "function") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  } catch (_) {
+    /* ignore */
+  }
 }
+
+// Expose selected utilities for test harness when running under Jest (CommonJS environment)
+try {
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports.showNotification = showNotification;
+  }
+} catch (_) {}
+
+// Defer exporting calculation & validation helpers until after their declarations
+// A lightweight polling to append once definitions exist (for test environment only)
+try {
+  if (typeof module !== "undefined" && module.exports) {
+    // Use a microtask to ensure later function declarations are hoisted (they are function declarations, so this is mostly defensive)
+    queueMicrotask(() => {
+      try {
+        if (typeof calculateMortgage === "function")
+          module.exports.calculateMortgage = calculateMortgage;
+        if (typeof clearPurchaseFieldErrors === "function")
+          module.exports.clearPurchaseFieldErrors = clearPurchaseFieldErrors;
+        if (typeof applyPurchaseValidationErrors === "function")
+          module.exports.applyPurchaseValidationErrors =
+            applyPurchaseValidationErrors;
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+} catch (_) {}
 
 function hideNotification() {
   const notificationArea = document.getElementById("notificationArea");
@@ -365,20 +399,8 @@ function initializeEventListeners() {
   }
 
   // Input field event listeners for down payment calculations
-  const propertyValue = document.getElementById("propertyValue");
-  if (propertyValue) {
-    propertyValue.addEventListener("input", updateDownPaymentAmount);
-  }
-
-  const downPaymentPercent = document.getElementById("downPaymentPercent");
-  if (downPaymentPercent) {
-    downPaymentPercent.addEventListener("input", updateDownPaymentAmount);
-  }
-
-  const downPaymentAmount = document.getElementById("downPaymentAmount");
-  if (downPaymentAmount) {
-    downPaymentAmount.addEventListener("input", updateDownPaymentPercent);
-  }
+  // Down Payment Sync listeners (enhanced logic replaces legacy simple handlers)
+  attachDownPaymentSyncListeners();
 
   // Tab switching event listeners
   const refinanceTab = document.getElementById("refinance-tab");
@@ -1163,7 +1185,7 @@ function loadLogo() {
 }
 
 // Calculate mortgage based on input values
-function calculateMortgage(formType = "purchase") {
+function calculateMortgage(formType = "purchase", options = {}) {
   let propertyValue,
     loanAmount,
     loanTerm,
@@ -1172,6 +1194,8 @@ function calculateMortgage(formType = "purchase") {
     homeInsurance,
     hoa,
     pmiRate;
+  // Added: capture downPaymentPercent separately for purchase validation
+  let downPaymentPercentRaw = 0;
 
   // Refinance uses a dollar-based PMI amount; keep separate from purchase percent-based pmiRate
   let pmiAmountRefi = 0;
@@ -1250,6 +1274,9 @@ function calculateMortgage(formType = "purchase") {
       parseFloat(document.getElementById("propertyValue").value) || 0;
     var downPaymentAmount =
       parseFloat(document.getElementById("downPaymentAmount").value) || 0;
+    downPaymentPercentRaw = parseFloat(
+      document.getElementById("downPaymentPercent")?.value
+    );
     loanAmount = propertyValue - downPaymentAmount;
     loanTerm = parseInt(document.getElementById("loanTerm").value, 10) || 0;
     interestRate =
@@ -1269,10 +1296,112 @@ function calculateMortgage(formType = "purchase") {
 
   // Validate inputs
   if (formType === "purchase") {
-    if (
-      !validateInputs(propertyValue, downPaymentAmount, loanTerm, interestRate)
-    ) {
+    // New purchase-specific validation (Priority 1 Task 1)
+    const validation = validatePurchaseInputs({
+      propertyValue,
+      downPaymentAmount,
+      downPaymentPercent: downPaymentPercentRaw,
+      loanTerm,
+      interestRate,
+      pmiRate,
+    });
+    if (!validation.valid) {
+      clearPurchaseFieldErrors();
+      applyPurchaseValidationErrors(validation.errors);
+      if (validation.errors.length) {
+        // If multiple errors, optionally present a concise summary
+        if (validation.errors.length > 2) {
+          const summary = validation.errors.map((e) => e.message).join(" | ");
+          showErrorMessage(summary);
+        } else {
+          showErrorMessage(validation.errors[0].message);
+        }
+      }
       return;
+    }
+    // Normalize possibly adjusted values (percent clamped / recalculated)
+    propertyValue = validation.normalized.propertyValue;
+    downPaymentAmount = validation.normalized.downPaymentAmount;
+    loanAmount = validation.normalized.loanAmount;
+    // Optionally surface warnings (non-blocking) — filter one-time TERM_LONG if already shown
+    if (validation.warnings && validation.warnings.length) {
+      const termLongIndex = validation.warnings.findIndex(
+        (w) => w.code === "TERM_LONG"
+      );
+      const filteredWarnings = validation.warnings.filter(
+        (w) => !(w.code === "TERM_LONG" && _longLoanTermWarned)
+      );
+      if (filteredWarnings.length) {
+        showNotification(
+          filteredWarnings.map((w) => w.message).join(" | "),
+          "warning"
+        );
+      }
+      if (termLongIndex !== -1 && !_longLoanTermWarned) {
+        _longLoanTermWarned = true; // mark one-time delivery
+      }
+    }
+    // Refresh LTV/PMI status using normalized values
+    updatePurchaseLtvPmiStatus({ notify: true });
+
+    // --- Task 16 Guardrails ---
+    // 1. Soft confirm for very low property value (< $10,000) (one-time per distinct value)
+    if (
+      propertyValue > 0 &&
+      propertyValue < 10000 &&
+      !options.bypassLowPV &&
+      propertyValue !== _lowPVLastConfirmedValue
+    ) {
+      showConfirmDialog(
+        `Property Value is only $${propertyValue.toLocaleString()} — proceed?`,
+        () => {
+          _lowPVLastConfirmedValue = propertyValue; // remember to avoid re-prompt
+          calculateMortgage(formType, { ...options, bypassLowPV: true });
+        },
+        () => {
+          // User canceled; abort calculation
+        }
+      );
+      return; // halt current execution path until user responds
+    }
+
+    // Pre-compute base monthly P&I (excluding PMI, escrow, HOA, extra)
+    let baseMonthlyPIApprox = 0;
+    if (loanAmount > 0 && loanTerm > 0) {
+      const n = loanTerm * 12;
+      const r = interestRate / 100 / 12;
+      if (r === 0) {
+        baseMonthlyPIApprox = loanAmount / n;
+      } else {
+        const pow = Math.pow(1 + r, n);
+        baseMonthlyPIApprox = (loanAmount * r * pow) / (pow - 1);
+      }
+    }
+
+    // 2. One-time long loan term warning (already surfaced via warnings if first time; ensure still one-time if validation skipped it somehow)
+    if (loanTerm > 50 && !_longLoanTermWarned) {
+      showNotification(
+        "Loan Term is unusually long (>50 years); verify.",
+        "warning"
+      );
+      _longLoanTermWarned = true;
+    }
+
+    // 3. Excess extra payment warning (extra > 5x base PI) — one-time per session
+    if (
+      baseMonthlyPIApprox > 0 &&
+      extraPayment > baseMonthlyPIApprox * 5 &&
+      !_excessExtraWarned
+    ) {
+      showNotification(
+        `Extra payment ($${extraPayment.toLocaleString(undefined, {
+          maximumFractionDigits: 2,
+        })}) exceeds 5× base P&I ($${baseMonthlyPIApprox.toFixed(
+          2
+        )}); verify intent.`,
+        "warning"
+      );
+      _excessExtraWarned = true;
     }
   } else {
     if (
@@ -1329,6 +1458,7 @@ function calculateMortgage(formType = "purchase") {
     pmi: monthlyPMI,
     propertyTax: propertyTax, // already monthly entries
     homeInsurance: homeInsurance, // already monthly
+    hoa: hoa, // include HOA (Task 14 Option A)
     extra: extraPayment,
     appraisedValue: propertyValue,
     pmiEndRule: pmiEndThresholdLtv, // pass numeric (80/78)
@@ -1342,36 +1472,127 @@ function calculateMortgage(formType = "purchase") {
   const totalInterest = builderResult.totalInterest;
   const totalCost = builderResult.totalCost;
   // builderResult.totalMonthlyPayment omits HOA & extra (HOA not part of builder abstraction). Add them for displayed total.
-  let totalMonthlyPayment =
-    builderResult.totalMonthlyPayment + hoa + extraPayment;
+  let totalMonthlyPayment = builderResult.totalMonthlyPayment + extraPayment; // HOA already included by builder
   // For consistency with legacy path, include PMI in first payment only if it actually applies month 1 (ScheduleBuilder sets pmiMeta.pmiEndsMonth accordingly).
   // baseMonthlyPayment (without extra) analogous to prior calculation
   const baseMonthlyPayment =
     builderResult.baseMonthlyPaymentNoPMI +
     (builderResult.pmiMeta.pmiEndsMonth === 1
       ? 0
-      : builderResult.monthlyPMIInput) +
-    hoa;
+      : builderResult.monthlyPMIInput); // builder base already has HOA
 
-  // Build detailed amortization table (legacy format) using existing generator for UI table until migrated
-  const numberOfPayments = loanTerm * 12;
-  const monthlyInterestRate = interestRate / 100 / 12;
-  const currentAmortizationData = generateAmortizationSchedule(
-    builderInput.amount,
-    monthlyInterestRate,
-    numberOfPayments,
-    monthlyPropertyTax,
-    monthlyHomeInsurance,
-    monthlyPMI,
-    hoa,
-    extraPayment,
-    propertyValue,
-    formType === "refinance",
-    pmiEndThresholdLtv
-  );
-  if (currentAmortizationData && currentAmortizationData.length > 0) {
-    // Align displayed payment with first schedule row (already includes extra + escrow + PMI + HOA)
-    totalMonthlyPayment = currentAmortizationData[0].payment;
+  // --- Unified Display Schedule (Task 5 Purchase Path) ---
+  // For purchase we now derive the display amortization schedule directly from builderInput / builderResult
+  // to eliminate divergence with generateAmortizationSchedule. Refinance still uses legacy generator for now.
+  let currentAmortizationData;
+  if (formType === "purchase") {
+    const numberOfPayments = loanTerm * 12;
+    const monthlyRate = interestRate / 100 / 12;
+    const round2 = (v) => Math.round((v + Number.EPSILON) * 100) / 100;
+    let balance = builderInput.amount;
+    let monthIdx = 0;
+    const schedule = [];
+    // Pre-calc static monthly PI (already computed as builderResult.monthlyPI but we keep a local for precision adjustments)
+    const monthlyPIInternal = builderResult.monthlyPI;
+    while (balance > 0.01 && monthIdx < numberOfPayments) {
+      monthIdx++;
+      // Date: mimic legacy by offsetting from today (first payment next month)
+      const today = new Date();
+      const paymentDate = new Date(
+        today.getFullYear(),
+        today.getMonth() + monthIdx,
+        1
+      );
+      // Interest & principal (align rounding logic with ScheduleBuilder)
+      let interestPortion = monthlyRate === 0 ? 0 : balance * monthlyRate;
+      let principalPortion =
+        monthlyRate === 0
+          ? monthlyPIInternal
+          : monthlyPIInternal - interestPortion;
+      interestPortion = round2(interestPortion);
+      principalPortion = round2(principalPortion);
+      if (monthlyRate !== 0) {
+        const roundedPI = round2(interestPortion + principalPortion);
+        const scheduledPI = round2(monthlyPIInternal);
+        const delta = scheduledPI - roundedPI;
+        if (Math.abs(delta) >= 0.01) {
+          principalPortion = round2(principalPortion + delta);
+        }
+      }
+      // PMI: replicate builder rule using pmiMeta threshold data and original property value
+      let pmiCharge = 0;
+      if (
+        builderResult.monthlyPMIInput > 0 &&
+        builderResult.pmiMeta.pmiEndsMonth !== 1
+      ) {
+        // Determine if PMI applies this month: builderResult.pmiMeta.pmiEndsMonth is first PMI-FREE month (1-based) or 1 if never applied
+        if (
+          builderResult.pmiMeta.pmiEndsMonth === null ||
+          monthIdx < builderResult.pmiMeta.pmiEndsMonth
+        ) {
+          pmiCharge = builderResult.monthlyPMIInput;
+        }
+      }
+      // Extra principal
+      let actualExtra = extraPayment || 0;
+      // Cap principal+extra at remaining balance
+      let principalReduction = principalPortion + actualExtra;
+      if (principalReduction > balance) {
+        // Adjust extra if overshoot
+        actualExtra = Math.max(0, balance - principalPortion);
+        principalReduction = principalPortion + actualExtra;
+      }
+      balance = round2(balance - principalReduction);
+      if (balance < 0) balance = 0;
+      const escrow = monthlyPropertyTax + monthlyHomeInsurance; // used only for total out-of-pocket; explicit columns keep tax/insurance separate historically
+      const totalPayment = round2(
+        principalPortion +
+          interestPortion +
+          pmiCharge +
+          monthlyPropertyTax +
+          monthlyHomeInsurance +
+          hoa +
+          actualExtra
+      );
+      schedule.push({
+        paymentNumber: monthIdx,
+        paymentDate,
+        payment: totalPayment,
+        principal: round2(principalPortion + actualExtra), // keep legacy meaning: principal includes extra (table splits it visually)
+        interest: interestPortion,
+        balance,
+        propertyTax: monthlyPropertyTax,
+        insurance: monthlyHomeInsurance,
+        pmi: pmiCharge,
+        hoa: hoa,
+        extraPayment: round2(actualExtra),
+      });
+      if (balance <= 0) break;
+    }
+    currentAmortizationData = schedule;
+    if (schedule.length > 0) {
+      totalMonthlyPayment = schedule[0].payment; // align displayed figure with first row
+    }
+  } else {
+    // Refinance path (still using legacy generator until unified engine extended)
+    const numberOfPayments = loanTerm * 12;
+    const monthlyInterestRate = interestRate / 100 / 12;
+    currentAmortizationData = generateAmortizationSchedule(
+      builderInput.amount,
+      monthlyInterestRate,
+      numberOfPayments,
+      monthlyPropertyTax,
+      monthlyHomeInsurance,
+      monthlyPMI,
+      hoa,
+      extraPayment,
+      propertyValue,
+      formType === "refinance",
+      pmiEndThresholdLtv
+    );
+    if (currentAmortizationData && currentAmortizationData.length > 0) {
+      totalMonthlyPayment = currentAmortizationData[0].payment;
+    }
   }
 
   // Store data in the appropriate tab structure
@@ -1459,6 +1680,417 @@ function calculateMortgage(formType = "purchase") {
   }
 
   saveCalculationToHistory(formType, formData, tabData.calculationResults);
+}
+
+// ---------------------------------------------
+// Purchase-Specific Structural Validation Helper
+// (Priority 1 Task 1 implementation)
+// ---------------------------------------------
+// Allows 100% cash purchase (loanAmount = 0) without error.
+// Provides blocking errors and non-blocking warnings in a single pass.
+function validatePurchaseInputs(raw) {
+  const errors = [];
+  const warnings = [];
+  let {
+    propertyValue,
+    downPaymentAmount,
+    downPaymentPercent,
+    loanTerm,
+    interestRate,
+    pmiRate,
+  } = raw;
+
+  // Normalize NaN to 0
+  const nz = (v) => (isNaN(v) ? 0 : v);
+  propertyValue = nz(propertyValue);
+  downPaymentAmount = nz(downPaymentAmount);
+  downPaymentPercent = nz(downPaymentPercent);
+  loanTerm = nz(loanTerm);
+  interestRate = nz(interestRate);
+  pmiRate = nz(pmiRate);
+
+  // Blocking validations
+  if (propertyValue <= 0) {
+    errors.push({
+      code: "PV_ZERO",
+      message: "Property Value must be greater than 0.",
+    });
+  }
+  if (downPaymentAmount < 0) {
+    errors.push({ code: "DP_NEG", message: "Down Payment must be ≥ 0." });
+  }
+  if (downPaymentAmount > propertyValue) {
+    errors.push({
+      code: "DP_EXCEEDS",
+      message: "Down Payment cannot exceed Property Value.",
+    });
+  }
+  if (loanTerm <= 0) {
+    errors.push({
+      code: "TERM_INVALID",
+      message: "Loan Term (years) must be greater than 0.",
+    });
+  }
+  if (interestRate < 0) {
+    errors.push({
+      code: "RATE_NEG",
+      message: "Interest Rate cannot be negative.",
+    });
+  }
+
+  // Percent bounds (only if propertyValue > 0 to avoid divide-by-zero recalcs)
+  if (downPaymentPercent < 0 || downPaymentPercent >= 100) {
+    errors.push({
+      code: "DP_PERCENT_RANGE",
+      message: "Down Payment % must be between 0 and 100.",
+    });
+  }
+
+  // Derive loan amount & handle 100% cash purchase allowance
+  let loanAmount = propertyValue - downPaymentAmount;
+  if (loanAmount < 0) {
+    // Already covered by DP_EXCEEDS but ensure non-negative for downstream
+    loanAmount = 0;
+  }
+
+  const cashPurchase = loanAmount === 0 && errors.length === 0;
+
+  // Normalize percent from amount if propertyValue > 0
+  if (propertyValue > 0 && downPaymentAmount >= 0) {
+    const computedPercent = (downPaymentAmount / propertyValue) * 100;
+    // Always adopt computed percent (user’s amount takes precedence)
+    downPaymentPercent =
+      Math.round((computedPercent + Number.EPSILON) * 100) / 100; // 2 decimals
+  }
+
+  // Warnings (only when no blocking errors so they don't distract)
+  if (!errors.length) {
+    // Loan term unusually long
+    if (loanTerm > 50) {
+      warnings.push({
+        code: "TERM_LONG",
+        message: "Loan Term is unusually long (>50 years); verify.",
+      });
+    }
+    // PMI capping & ignored logic
+    if (pmiRate > 5) {
+      warnings.push({
+        code: "PMI_HIGH",
+        message: "PMI Rate unusually high; capped at 5%.",
+      });
+      pmiRate = 5; // cap
+    }
+    if (propertyValue > 0) {
+      const pmiRuleSel = document.getElementById("pmiEndRule");
+      let threshold = 80;
+      if (pmiRuleSel) {
+        const v = parseFloat(pmiRuleSel.value);
+        threshold = isNaN(v) ? 80 : v;
+      }
+      const origLtv =
+        propertyValue > 0 ? (loanAmount / propertyValue) * 100 : 0;
+      if (pmiRate > 0 && (loanAmount === 0 || origLtv <= threshold)) {
+        warnings.push({
+          code: "PMI_IGNORED",
+          message:
+            "PMI Rate entered but no PMI will be charged (LTV at or below threshold).",
+        });
+      }
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    cashPurchase,
+    errors,
+    warnings,
+    normalized: {
+      propertyValue,
+      downPaymentAmount,
+      downPaymentPercent,
+      loanAmount,
+    },
+  };
+}
+
+// ---------------------------------------------
+// Purchase Inline Error UI Helpers (Priority 1 Task 2)
+// ---------------------------------------------
+const PURCHASE_FIELD_ID_MAP = {
+  PV_ZERO: "propertyValue",
+  DP_NEG: "downPaymentAmount",
+  DP_EXCEEDS: "downPaymentAmount",
+  DP_PERCENT_RANGE: "downPaymentPercent",
+  TERM_INVALID: "loanTerm",
+  RATE_NEG: "interestRate",
+};
+
+function mapPurchaseErrorToField(code) {
+  return PURCHASE_FIELD_ID_MAP[code] || null;
+}
+
+function clearPurchaseFieldErrors() {
+  const purchaseForm = document.getElementById("mortgageForm");
+  if (!purchaseForm) return;
+  const invalids = purchaseForm.querySelectorAll(".is-invalid");
+  invalids.forEach((el) => el.classList.remove("is-invalid"));
+  const feedbacks = purchaseForm.querySelectorAll(
+    ".invalid-feedback[data-purchase-inline]"
+  );
+  feedbacks.forEach((fb) => fb.remove());
+}
+
+function applyPurchaseValidationErrors(errors) {
+  errors.forEach((err) => {
+    const fieldId = mapPurchaseErrorToField(err.code);
+    if (!fieldId) return;
+    const input = document.getElementById(fieldId);
+    if (!input) return;
+    input.classList.add("is-invalid");
+    // Avoid duplicating feedback if already present
+    const existing = input.parentElement.querySelector(
+      `.invalid-feedback[data-purchase-inline][data-for="${fieldId}"]`
+    );
+    if (existing) {
+      existing.textContent = err.message;
+      return;
+    }
+    const div = document.createElement("div");
+    div.className = "invalid-feedback";
+    div.dataset.purchaseInline = "true";
+    div.dataset.for = fieldId;
+    div.textContent = err.message;
+    input.parentElement.appendChild(div);
+  });
+}
+
+// One-time attachment of blur/input listeners to clear invalid state once corrected
+function attachPurchaseValidationListenersOnce() {
+  if (attachPurchaseValidationListenersOnce._attached) return;
+  const ids = [
+    "propertyValue",
+    "downPaymentAmount",
+    "downPaymentPercent",
+    "loanTerm",
+    "interestRate",
+    "pmiRate",
+  ];
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", () => {
+      if (!el.classList.contains("is-invalid")) return;
+      // Lightweight re-validation of just this field contextually:
+      // For now, remove error styling; full validation runs on calculate.
+      el.classList.remove("is-invalid");
+      const fb = el.parentElement.querySelector(
+        `.invalid-feedback[data-purchase-inline][data-for="${id}"]`
+      );
+      if (fb) fb.remove();
+    });
+  });
+  attachPurchaseValidationListenersOnce._attached = true;
+}
+
+// Ensure listeners are attached after DOM ready (calculator might be invoked early)
+if (
+  document.readyState === "complete" ||
+  document.readyState === "interactive"
+) {
+  attachPurchaseValidationListenersOnce();
+} else {
+  document.addEventListener("DOMContentLoaded", () => {
+    attachPurchaseValidationListenersOnce();
+  });
+}
+
+// ---------------------------------------------
+// Origination LTV & PMI Status (Priority 1 Task 3)
+// ---------------------------------------------
+let _lastPmiState = null; // track transitions for optional notice
+let _pmiCapNotified = false;
+let _pmiIgnoredNotified = false;
+// Task 16 session-scoped guardrail flags
+let _lowPVLastConfirmedValue = null; // remembers last confirmed low property value
+let _longLoanTermWarned = false; // one-time long term warning
+let _excessExtraWarned = false; // one-time excess extra payment warning
+function handleRealtimePmiAdvisories(state, context) {
+  // state corresponds to pmi-* classification set in updatePurchaseLtvPmiStatus
+  const pmiRateEl = document.getElementById("pmiRate");
+  if (!pmiRateEl) return;
+  let rate = parseFloat(pmiRateEl.value) || 0;
+  if (rate > 5) {
+    // Hard clamp & notify once per session
+    pmiRateEl.value = "5";
+    rate = 5;
+    if (!_pmiCapNotified) {
+      showNotification("PMI rate capped at 5%.", "info");
+      _pmiCapNotified = true;
+    }
+  }
+  // Ignored PMI (entered but not charged) state transitions
+  if (state === "ignored" && rate > 0) {
+    if (!_pmiIgnoredNotified) {
+      showNotification(
+        "PMI entered but not charged at current LTV (below threshold).",
+        "info"
+      );
+      _pmiIgnoredNotified = true;
+    }
+  } else if (state === "active") {
+    // Leaving ignored to active resets ability to notify again later
+    _pmiIgnoredNotified = false;
+  } else if (state === "none" || state === "possible" || state === "pending") {
+    // Reset when not in ignored/active chain
+    _pmiIgnoredNotified = false;
+  }
+}
+function updatePurchaseLtvPmiStatus(options = {}) {
+  const pvEl = document.getElementById("propertyValue");
+  const dpAmtEl = document.getElementById("downPaymentAmount");
+  const dpPctEl = document.getElementById("downPaymentPercent");
+  const pmiRateEl = document.getElementById("pmiRate");
+  const pmiRuleEl = document.getElementById("pmiEndRule");
+  const badge = document.getElementById("purchaseLtvBadge");
+  const status = document.getElementById("purchasePmiStatus");
+  if (!pvEl || !dpAmtEl || !dpPctEl || !badge || !status) return;
+
+  const propertyValue = parseFloat(pvEl.value) || 0;
+  let downPaymentAmount = parseFloat(dpAmtEl.value) || 0;
+  if (downPaymentAmount < 0) downPaymentAmount = 0;
+  if (downPaymentAmount > propertyValue && propertyValue > 0) {
+    downPaymentAmount = propertyValue; // clamp for display only
+  }
+  let loanAmount = propertyValue - downPaymentAmount;
+  if (loanAmount < 0) loanAmount = 0;
+  const pmiRate = parseFloat(pmiRateEl?.value) || 0;
+  let threshold = 80;
+  if (pmiRuleEl) {
+    const v = parseFloat(pmiRuleEl.value);
+    if (!isNaN(v)) threshold = v;
+  }
+
+  let ltv = 0;
+  if (propertyValue > 0) {
+    ltv = (loanAmount / propertyValue) * 100;
+  }
+  const ltvDisplay = propertyValue > 0 ? `LTV ${ltv.toFixed(2)}%` : "LTV --%";
+
+  badge.classList.remove(
+    "ltv-pending",
+    "ltv-good",
+    "ltv-borderline",
+    "ltv-high",
+    "ltv-cash",
+    "bg-secondary",
+    "bg-success",
+    "bg-warning",
+    "bg-danger",
+    "bg-info"
+  );
+  if (propertyValue <= 0) {
+    badge.textContent = ltvDisplay;
+    badge.classList.add("ltv-pending", "bg-secondary");
+  } else if (loanAmount === 0) {
+    badge.textContent = "Cash Purchase";
+    badge.classList.add("ltv-cash", "bg-info");
+  } else if (ltv <= threshold) {
+    badge.textContent = ltvDisplay;
+    badge.classList.add("ltv-good", "bg-success");
+  } else if (ltv <= threshold + 5) {
+    badge.textContent = ltvDisplay;
+    badge.classList.add("ltv-borderline", "bg-warning");
+  } else {
+    badge.textContent = ltvDisplay;
+    badge.classList.add("ltv-high", "bg-danger");
+  }
+
+  status.className = status.className.replace(/\bpmi-[^\s]+/g, "").trim();
+  let state = "none";
+  let statusText = "No PMI";
+  const meetsThreshold =
+    propertyValue > 0 && loanAmount > 0 && ltv <= threshold;
+  if (loanAmount === 0) {
+    state = "none";
+    statusText = "No Loan (Cash Purchase)";
+  } else if (propertyValue <= 0) {
+    state = "pending";
+    statusText = "Awaiting Value";
+  } else if (pmiRate > 0 && ltv > threshold) {
+    state = "active";
+    statusText = "PMI Active";
+  } else if (pmiRate > 0 && ltv <= threshold) {
+    state = "ignored";
+    statusText = "PMI Entered (Not Charged)";
+  } else if (pmiRate === 0 && ltv > threshold) {
+    state = "possible";
+    statusText = "PMI Possible (Rate Blank)";
+  }
+  status.classList.add(`pmi-${state}`);
+  // Dynamic PMI messaging override when threshold satisfied with any down payment >= required
+  if (meetsThreshold && pmiRate === 0) {
+    // Purely qualifies without PMI rate entered
+    statusText = "No PMI Required";
+  }
+  status.textContent = statusText;
+
+  // Inline non-blocking warning (single instance) for ignored PMI (rate entered but not charged)
+  if (state === "ignored" && pmiRate > 0) {
+    let inline = document.getElementById("purchasePmiInlineWarning");
+    if (!inline) {
+      inline = document.createElement("div");
+      inline.id = "purchasePmiInlineWarning";
+      inline.className = "small text-warning mt-1";
+      inline.style.fontSize = "0.7rem";
+      status.parentElement?.appendChild(inline);
+    }
+    inline.textContent =
+      "PMI rate entered but not charged (LTV below threshold).";
+  } else {
+    const inline = document.getElementById("purchasePmiInlineWarning");
+    if (inline) inline.remove();
+  }
+
+  if (options.notify && _lastPmiState && _lastPmiState !== state) {
+    if (
+      (state === "active" && _lastPmiState !== "active") ||
+      (state !== "active" && _lastPmiState === "active")
+    ) {
+      showNotification(`PMI status changed: ${statusText}`, "info");
+    }
+  }
+  // Always run realtime advisory after status classification
+  handleRealtimePmiAdvisories(state);
+  _lastPmiState = state;
+}
+
+function attachPurchaseLtvPmiListeners() {
+  if (attachPurchaseLtvPmiListeners._attached) return;
+  [
+    "propertyValue",
+    "downPaymentAmount",
+    "downPaymentPercent",
+    "pmiRate",
+    "pmiEndRule",
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", () => updatePurchaseLtvPmiStatus());
+    el.addEventListener("blur", () => updatePurchaseLtvPmiStatus());
+  });
+  attachPurchaseLtvPmiListeners._attached = true;
+  updatePurchaseLtvPmiStatus();
+}
+
+if (
+  document.readyState === "complete" ||
+  document.readyState === "interactive"
+) {
+  attachPurchaseLtvPmiListeners();
+} else {
+  document.addEventListener("DOMContentLoaded", () =>
+    attachPurchaseLtvPmiListeners()
+  );
 }
 
 // Calculate HELOC based on input values
@@ -2527,6 +3159,43 @@ function updateResultsUI(
     formatCurrency(extraPayment);
   document.getElementById("totalCost").textContent = formatCurrency(totalCost);
 
+  // Purchase-specific: expose extra payment metrics (Task 6)
+  if (formType === "purchase") {
+    const extraRow = document.getElementById("extraMetricsRow");
+    const monthsRow = document.getElementById("monthsSavedRow");
+    const interestSavedEl = document.getElementById("interestSavedExtra");
+    const monthsSavedEl = document.getElementById("monthsSavedExtra");
+    if (extraRow && monthsRow && interestSavedEl && monthsSavedEl) {
+      // builderResult stored on purchaseData.tabData.builderResult
+      const br = purchaseData && purchaseData.builderResult;
+      if (
+        br &&
+        typeof extraPayment === "number" &&
+        extraPayment > 0 &&
+        br.extraDeltas
+      ) {
+        const interestSaved = br.extraDeltas.interestSaved || 0;
+        const monthsSaved = br.extraDeltas.monthsSaved || 0;
+        extraRow.style.display = "block";
+        monthsRow.style.display = "block";
+        interestSavedEl.textContent = formatCurrency(interestSaved);
+        if (monthsSaved > 0) {
+          const y = Math.floor(monthsSaved / 12);
+          const m = monthsSaved % 12;
+          monthsSavedEl.textContent = `${y > 0 ? y + "y " : ""}${m}m`;
+        } else {
+          monthsSavedEl.textContent = "0m";
+        }
+      } else {
+        // Hide when no extra or no baseline delta
+        extraRow.style.display = "none";
+        monthsRow.style.display = "none";
+        interestSavedEl.textContent = "—";
+        monthsSavedEl.textContent = "—";
+      }
+    }
+  }
+
   // Refi: Show closing costs & points handling if available
   try {
     const infoRow = document.getElementById("refiCostsInfoRow");
@@ -2581,42 +3250,157 @@ function updateResultsUI(
   document.getElementById("summaryTotalInterest").textContent =
     formatCurrency(totalInterest);
 
+  // Build PMI tooltip details (Task 15)
+  try {
+    const tooltipEl = document.getElementById("summaryPMITooltip");
+    if (tooltipEl) {
+      let pmiMeta = null;
+      try {
+        const tabData = formType === "purchase" ? purchaseData : refinanceData;
+        pmiMeta = tabData?.builderResult?.pmiMeta || null;
+      } catch (_e) {}
+      const startingLTV = pmiMeta?.startingLTV || null; // not currently exposed; fallback compute
+      let computedStartLTV = null;
+      if (propertyValue > 0) {
+        const principalBase =
+          formType === "refinance" ? adjustedLoanAmount : loanAmount;
+        computedStartLTV = principalBase / propertyValue;
+      }
+      const rule = pmiMeta
+        ? pmiMeta.thresholdLTV
+        : (pmiEndThresholdLtv || 80) / 100;
+      const hasSchedule =
+        Array.isArray(amortizationData) && amortizationData.length > 0;
+      const pmiPaidTotal = pmiMeta?.pmiTotalPaid ?? 0;
+      const endsMonth = pmiMeta?.pmiEndsMonth;
+      const anyPmiCharged =
+        hasSchedule && amortizationData.some((r) => r.pmi && r.pmi > 0);
+      let dropText;
+      if (!anyPmiCharged) {
+        dropText = "N/A (No PMI)";
+      } else if (anyPmiCharged && endsMonth === null) {
+        dropText = "Never (Full Term)";
+      } else if (
+        anyPmiCharged &&
+        typeof endsMonth === "number" &&
+        endsMonth > 1
+      ) {
+        dropText = `Month ${endsMonth}`;
+      } else if (endsMonth === 1) {
+        dropText = "N/A (No PMI)";
+      } else {
+        dropText = "Unknown";
+      }
+      const ltvDisplay =
+        ((computedStartLTV || startingLTV || 0) * 100).toFixed(2) + "%";
+      const thresholdDisplay = (rule * 100).toFixed(0) + "%";
+      const totalPaidDisplay = formatCurrency(pmiPaidTotal || 0);
+      const status = !anyPmiCharged
+        ? "Not Charged"
+        : endsMonth === null
+        ? "Active (Never Drops)"
+        : endsMonth > 1
+        ? "Drops"
+        : "Not Charged";
+      const tooltipLines = [
+        `Starting LTV: ${ltvDisplay}`,
+        `Threshold: ${thresholdDisplay}`,
+        `Drop: ${dropText}`,
+        `Total PMI Paid: ${totalPaidDisplay}`,
+        `Status: ${status}`,
+      ];
+      tooltipEl.setAttribute("data-bs-original-title", tooltipLines.join("\n"));
+      tooltipEl.setAttribute("title", tooltipLines.join("\n"));
+      // (Re)initialize Bootstrap tooltip if available
+      if (window.bootstrap && window.bootstrap.Tooltip) {
+        try {
+          const existing = bootstrap.Tooltip.getInstance(tooltipEl);
+          if (existing) existing.dispose();
+          new bootstrap.Tooltip(tooltipEl);
+        } catch (_tt) {}
+      }
+    }
+  } catch (e) {
+    console.warn("PMI tooltip build failed", e);
+  }
+
   // Calculate and display loan payoff date (use actual payoff from schedule if available)
   let payoffDate;
   if (amortizationData && amortizationData.length > 0) {
     // Use the actual payoff date from the last payment in the schedule
     payoffDate = amortizationData[amortizationData.length - 1].paymentDate;
-    // Determine PMI drop-off status from schedule
-    const hasPmi = amortizationData.some((r) => r.pmi && r.pmi > 0);
-    // First month where PMI becomes 0 after having PMI previously
-    let sawPmi = false;
-    let dropIndex = -1;
-    if (hasPmi) {
-      for (let i = 0; i < amortizationData.length; i++) {
-        const row = amortizationData[i];
-        if (row.pmi && row.pmi > 0) sawPmi = true;
-        if (sawPmi && (!row.pmi || row.pmi === 0)) {
-          dropIndex = i;
-          break;
-        }
-      }
-    }
+    // Determine PMI drop-off using builderResult.pmiMeta when available (more authoritative)
     const dropRow = document.getElementById("summaryPMIDropRow");
     const dropSpan = document.getElementById("summaryPMIDrop");
     if (dropRow && dropSpan) {
-      // Always show the row with an explicit status
       dropRow.style.display = "block";
-      if (hasPmi && dropIndex >= 0) {
-        const dropDate = amortizationData[dropIndex].paymentDate;
-        const dateText = dropDate.toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "long",
-        });
-        dropSpan.textContent = `${dateText} (Payment #${dropIndex + 1})`;
-      } else if (hasPmi && dropIndex === -1) {
-        dropSpan.textContent = "Never (PMI lasts full term)";
+      let pmiMeta = null;
+      try {
+        const tabData = formType === "purchase" ? purchaseData : refinanceData;
+        pmiMeta = tabData?.builderResult?.pmiMeta || null;
+      } catch (e) {}
+      if (pmiMeta) {
+        const { pmiEndsMonth } = pmiMeta; // 1 => never charged; null => never ends; >1 => first month without PMI
+        // Detect if PMI ever charged using schedule rows
+        const hasPmi = amortizationData.some((r) => r.pmi && r.pmi > 0);
+        if (!hasPmi) {
+          dropSpan.textContent = "N/A (No PMI)";
+        } else if (hasPmi && pmiEndsMonth === null) {
+          dropSpan.textContent = "Never (PMI lasts full term)";
+        } else if (
+          hasPmi &&
+          typeof pmiEndsMonth === "number" &&
+          pmiEndsMonth > 1
+        ) {
+          // pmiEndsMonth is 1-based index of first PMI-FREE month, so last charged month = pmiEndsMonth - 1
+          const chargedIndex = pmiEndsMonth - 2; // zero-based index for last charged month
+          const targetIndex = Math.max(0, pmiEndsMonth - 1); // first free month index zero-based
+          const dateSource =
+            amortizationData[targetIndex] ||
+            amortizationData[amortizationData.length - 1];
+          const dateText = dateSource.paymentDate.toLocaleDateString("en-US", {
+            month: "long",
+            year: "numeric",
+          });
+          dropSpan.textContent = `${dateText} (Payment #${targetIndex + 1})`;
+        } else if (pmiEndsMonth === 1) {
+          dropSpan.textContent = "N/A (No PMI)";
+        } else {
+          // Fallback to schedule scan if meta ambiguous
+          const hasPmi2 = amortizationData.some((r) => r.pmi && r.pmi > 0);
+          if (!hasPmi2) {
+            dropSpan.textContent = "N/A (No PMI)";
+          } else {
+            dropSpan.textContent = "Never (PMI lasts full term)";
+          }
+        }
       } else {
-        dropSpan.textContent = "N/A (No PMI)";
+        // Legacy fallback schedule scan
+        const hasPmi = amortizationData.some((r) => r.pmi && r.pmi > 0);
+        let sawPmi = false;
+        let dropIndex = -1;
+        if (hasPmi) {
+          for (let i = 0; i < amortizationData.length; i++) {
+            const row = amortizationData[i];
+            if (row.pmi && row.pmi > 0) sawPmi = true;
+            if (sawPmi && (!row.pmi || row.pmi === 0)) {
+              dropIndex = i;
+              break;
+            }
+          }
+        }
+        if (!hasPmi) {
+          dropSpan.textContent = "N/A (No PMI)";
+        } else if (dropIndex >= 0) {
+          const dropDate = amortizationData[dropIndex].paymentDate;
+          const dateText = dropDate.toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "long",
+          });
+          dropSpan.textContent = `${dateText} (Payment #${dropIndex + 1})`;
+        } else {
+          dropSpan.textContent = "Never (PMI lasts full term)";
+        }
       }
     }
   } else {
@@ -2704,6 +3488,7 @@ function updateResultsUI(
 }
 
 // Generate amortization schedule data
+// LEGACY: Refinance-only amortization generator. Purchase tab now uses unified builder snapshot.
 function generateAmortizationSchedule(
   loanAmount,
   monthlyInterestRate,
@@ -3411,32 +4196,146 @@ function renderAmortizationCharts() {
   console.log("Balance chart created successfully");
 }
 
-// Update down payment amount based on percentage
-function updateDownPaymentPercent() {
-  const propertyValue =
-    parseFloat(document.getElementById("propertyValue").value) || 0;
-  const downPaymentAmount =
-    parseFloat(document.getElementById("downPaymentAmount").value) || 0;
+// ---------------------------------------------
+// Down Payment Bidirectional Sync (Priority 1 Task 2)
+// ---------------------------------------------
+// Design:
+// - Debounce: 200ms per field input stream.
+// - Last-edit wins using source tracking.
+// - Drift tolerance: amount < $1 or percent < 0.01% => skip update.
+// - Rounding: amount -> nearest dollar; percent -> 2 decimals.
+// - Loop prevention via syncInProgress flag and source check.
+// - Clamp: percent < 0 => 0; percent >= 100 => 99.99 (warning left to validation layer).
+// - Property value 0 => zero out derived field silently.
 
-  if (propertyValue > 0 && downPaymentAmount >= 0) {
-    const downPaymentPercent = (downPaymentAmount / propertyValue) * 100;
-    document.getElementById("downPaymentPercent").value =
-      downPaymentPercent.toFixed(2);
+const DOWN_PAYMENT_SYNC = {
+  debounceMs: 200,
+  lastSource: null, // 'amount' | 'percent' | 'property' | null
+  timers: {},
+  syncInProgress: false,
+};
+
+function getDPInputs() {
+  return {
+    property: document.getElementById("propertyValue"),
+    amount: document.getElementById("downPaymentAmount"),
+    percent: document.getElementById("downPaymentPercent"),
+  };
+}
+
+function parseNum(el) {
+  if (!el) return 0;
+  const v = parseFloat(el.value);
+  return isNaN(v) ? 0 : v;
+}
+
+function roundAmount(v) {
+  return Math.round(v);
+}
+function roundPercent(v) {
+  return Math.round((v + Number.EPSILON) * 100) / 100; // 2 decimals
+}
+
+function scheduleDP(fn, key) {
+  const ms = DOWN_PAYMENT_SYNC.debounceMs;
+  if (DOWN_PAYMENT_SYNC.timers[key]) {
+    clearTimeout(DOWN_PAYMENT_SYNC.timers[key]);
+  }
+  DOWN_PAYMENT_SYNC.timers[key] = setTimeout(fn, ms);
+}
+
+function applyDownPaymentValues({ amount, percent }, { source }) {
+  const { amount: amountEl, percent: percentEl } = getDPInputs();
+  if (!amountEl || !percentEl) return;
+  DOWN_PAYMENT_SYNC.syncInProgress = true;
+  try {
+    if (typeof amount === "number" && !isNaN(amount)) {
+      amountEl.value = amount.toString();
+    }
+    if (typeof percent === "number" && !isNaN(percent)) {
+      percentEl.value = percent.toFixed(2);
+    }
+  } finally {
+    DOWN_PAYMENT_SYNC.syncInProgress = false;
+  }
+  DOWN_PAYMENT_SYNC.lastSource = source;
+}
+
+function recalcPercentFromAmount() {
+  const { property, amount } = getDPInputs();
+  const pv = parseNum(property);
+  const amt = parseNum(amount);
+  if (pv <= 0) {
+    applyDownPaymentValues({ percent: 0 }, { source: "amount" });
+    return;
+  }
+  const pctRaw = (amt / pv) * 100;
+  let pct = pctRaw;
+  if (pct < 0) pct = 0;
+  if (pct >= 100) pct = 99.99; // soft clamp prior to validation error
+  const pctRounded = roundPercent(pct);
+  const currentPct = parseNum(getDPInputs().percent);
+  if (Math.abs(pctRounded - currentPct) < 0.01) return; // drift tolerance
+  applyDownPaymentValues({ percent: pctRounded }, { source: "amount" });
+}
+
+function recalcAmountFromPercent() {
+  const { property, percent } = getDPInputs();
+  const pv = parseNum(property);
+  const pct = parseNum(percent);
+  if (pv <= 0) {
+    applyDownPaymentValues({ amount: 0 }, { source: "percent" });
+    return;
+  }
+  let pctClamped = pct;
+  if (pctClamped < 0) pctClamped = 0;
+  if (pctClamped >= 100) pctClamped = 99.99;
+  const amountRaw = (pv * pctClamped) / 100;
+  const amtRounded = roundAmount(amountRaw);
+  const currentAmt = parseNum(getDPInputs().amount);
+  if (Math.abs(amtRounded - currentAmt) < 1) return; // drift tolerance
+  applyDownPaymentValues({ amount: amtRounded }, { source: "percent" });
+}
+
+function propertyValueChangedForDP() {
+  // When property value changes, prefer recomputing amount from percent
+  // unless last source was amount (then recompute percent from amount)
+  const last = DOWN_PAYMENT_SYNC.lastSource;
+  if (last === "amount") {
+    recalcPercentFromAmount();
+  } else {
+    recalcAmountFromPercent();
   }
 }
 
-// Update down payment percentage based on amount
-function updateDownPaymentAmount() {
-  const propertyValue =
-    parseFloat(document.getElementById("propertyValue").value) || 0;
-  const downPaymentPercent =
-    parseFloat(document.getElementById("downPaymentPercent").value) || 0;
-
-  if (propertyValue > 0 && downPaymentPercent >= 0) {
-    const downPaymentAmount = (propertyValue * downPaymentPercent) / 100;
-    document.getElementById("downPaymentAmount").value =
-      downPaymentAmount.toFixed(2);
+function attachDownPaymentSyncListeners() {
+  if (attachDownPaymentSyncListeners._attached) return;
+  const { property, amount, percent } = getDPInputs();
+  if (property) {
+    property.addEventListener("input", () => {
+      if (DOWN_PAYMENT_SYNC.syncInProgress) return;
+      DOWN_PAYMENT_SYNC.lastSource = "property";
+      scheduleDP(propertyValueChangedForDP, "property");
+    });
+    property.addEventListener("blur", propertyValueChangedForDP);
   }
+  if (amount) {
+    amount.addEventListener("input", () => {
+      if (DOWN_PAYMENT_SYNC.syncInProgress) return;
+      DOWN_PAYMENT_SYNC.lastSource = "amount";
+      scheduleDP(recalcPercentFromAmount, "amount");
+    });
+    amount.addEventListener("blur", recalcPercentFromAmount);
+  }
+  if (percent) {
+    percent.addEventListener("input", () => {
+      if (DOWN_PAYMENT_SYNC.syncInProgress) return;
+      DOWN_PAYMENT_SYNC.lastSource = "percent";
+      scheduleDP(recalcAmountFromPercent, "percent");
+    });
+    percent.addEventListener("blur", recalcAmountFromPercent);
+  }
+  attachDownPaymentSyncListeners._attached = true;
 }
 
 // Toggle PMI mode between monthly and annual
@@ -3591,6 +4490,42 @@ function toggleComparisonPmiMode(loanLetter) {
     const currentValue = parseFloat(input.value) || 0;
     if (currentValue > 0) {
       input.value = (currentValue / 12).toFixed(2);
+    }
+  }
+
+  // --- Task 7: Rounding & Consistency Check (purchase only) ---
+  if (formType === "purchase") {
+    try {
+      const sched = amortizationData || [];
+      if (sched.length > 0) {
+        const row1 = sched[0];
+        const displayed = parseFloat(
+          document
+            .getElementById("monthlyPayment")
+            .textContent.replace(/[^0-9.\-]/g, "") || "0"
+        );
+        const diff = Math.abs(row1.payment - displayed);
+        if (diff >= 0.01) {
+          console.warn(
+            `[PurchaseConsistency] Monthly payment mismatch >$0.01: row1=${row1.payment.toFixed(
+              2
+            )} displayed=${displayed.toFixed(2)} diff=${diff.toFixed(2)}`
+          );
+        }
+      }
+      // Base monthly payment row visibility (only when extra>0)
+      const baseRowContainer = document
+        .getElementById("baseMonthlyPayment")
+        ?.closest(".result-item");
+      if (baseRowContainer) {
+        if (typeof extraPayment === "number" && extraPayment > 0) {
+          baseRowContainer.style.display = "block";
+        } else {
+          baseRowContainer.style.display = "none";
+        }
+      }
+    } catch (e) {
+      console.warn("[PurchaseConsistency] Check failed:", e);
     }
   }
 }
@@ -4520,18 +5455,69 @@ async function exportFullReport() {
         }
 
         // Generate a baseline schedule WITHOUT extra payments
-        const noExtraSchedule = generateAmortizationSchedule(
-          loanAmount,
-          monthlyRate,
-          nper,
-          monthlyPropertyTax,
-          monthlyHomeInsurance,
-          monthlyPMI,
-          hoa,
-          0, // no extra
-          appraisedVal,
-          isRefi
-        );
+        let noExtraSchedule;
+        if (isRefi) {
+          noExtraSchedule = generateAmortizationSchedule(
+            loanAmount,
+            monthlyRate,
+            nper,
+            monthlyPropertyTax,
+            monthlyHomeInsurance,
+            monthlyPMI,
+            hoa,
+            0, // no extra
+            appraisedVal,
+            isRefi
+          );
+        } else {
+          // Purchase: derive a no-extra snapshot using existing purchase schedule snapshot logic
+          const purchaseBaseline = [];
+          let balance = loanAmount;
+          for (let i = 1; i <= nper && balance > 0.01; i++) {
+            const monthlyRateEff = monthlyRate;
+            let interestPortion =
+              monthlyRateEff === 0 ? 0 : balance * monthlyRateEff;
+            let principalPortion =
+              monthlyRateEff === 0
+                ? balance / (nper - i + 1)
+                : monthlyPI - interestPortion;
+            if (principalPortion > balance) principalPortion = balance;
+            // PMI replicate baseline rule (monthlyPMI already reflects current user input; if PMI ends earlier with extra, baseline may pay PMI longer)
+            // Simpler: reuse existing amortizationData row PMI if available index, else approximate using monthlyPMI heuristic.
+            let pmi = 0;
+            if (monthlyPMI > 0) {
+              // rough LTV based drop: assume threshold pmiEndThresholdLtv and original property value = loanAmount / (1 - downPaymentPercent)
+              // We lack down payment percent in this isolated block; safe fallback: if current amortizationData row had PMI >0 at i-1 use it.
+              if (amortizationData[i - 1] && amortizationData[i - 1].pmi > 0) {
+                pmi = amortizationData[i - 1].pmi; // mirror actual charged PMI for month index
+              }
+            }
+            balance = round2(balance - principalPortion);
+            const totalPayment = round2(
+              principalPortion +
+                interestPortion +
+                monthlyPropertyTax +
+                monthlyHomeInsurance +
+                pmi +
+                hoa
+            );
+            purchaseBaseline.push({
+              paymentNumber: i,
+              paymentDate: new Date(),
+              payment: totalPayment,
+              principal: principalPortion,
+              interest: interestPortion,
+              balance: balance < 0 ? 0 : balance,
+              propertyTax: monthlyPropertyTax,
+              insurance: monthlyHomeInsurance,
+              pmi: pmi,
+              hoa: hoa,
+              extraPayment: 0,
+            });
+            if (balance <= 0) break;
+          }
+          noExtraSchedule = purchaseBaseline;
+        }
 
         // Helper to sum PMI and find drop index
         const sumPMI = (sched) => sched.reduce((s, r) => s + (r.pmi || 0), 0);
@@ -6665,6 +7651,42 @@ document.addEventListener("DOMContentLoaded", function () {
       }
       // Small delay to ensure tab is fully shown before rendering
       setTimeout(renderCharts, 100);
+    });
+  }
+
+  // --- Purchase PMI End Rule persistence (Task 11) ---
+  try {
+    const storedPurchasePmiRule = localStorage.getItem("purchase_pmiEndRule");
+    if (storedPurchasePmiRule === "78" || storedPurchasePmiRule === "80") {
+      const purchaseRuleSel = document.getElementById("pmiEndRule");
+      if (purchaseRuleSel) {
+        purchaseRuleSel.value = storedPurchasePmiRule;
+        try {
+          updatePurchaseLtvPmiStatus && updatePurchaseLtvPmiStatus();
+        } catch (e) {
+          console.warn("PMI status refresh failed during rule restore", e);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("PMI rule load skipped", e);
+  }
+  const purchaseRuleSel = document.getElementById("pmiEndRule");
+  if (purchaseRuleSel) {
+    purchaseRuleSel.addEventListener("change", () => {
+      const val = purchaseRuleSel.value;
+      if (val === "78" || val === "80") {
+        try {
+          localStorage.setItem("purchase_pmiEndRule", val);
+        } catch (e) {
+          console.warn("PMI rule persist failed", e);
+        }
+        try {
+          updatePurchaseLtvPmiStatus && updatePurchaseLtvPmiStatus();
+        } catch (e) {
+          console.warn("PMI status refresh failed after rule change", e);
+        }
+      }
     });
   }
 });

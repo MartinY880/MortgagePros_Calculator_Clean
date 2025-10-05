@@ -7,7 +7,7 @@
  *    letter: 'A' | 'B' | 'C' | string,
  *    name: string,
  *    totals: {
- *      totalOutOfPocket: number,   // principal + interest + pmi + tax + insurance
+ *      totalOutOfPocket: number,   // principal + interest + pmi + tax + insurance + hoa
  *      totalCostPI: number         // principal + interest
  *    },
  *    payoffTime: { years: number, months: number } // months component < 12

@@ -11,6 +11,7 @@
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "build-installer": "electron-builder --win nsis",
+    "test": "jest --config jest.config.js",
     "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [
@@ -27,7 +28,9 @@
     "electron-builder": "^26.0.12",
     "electron-icon-builder": "^2.0.1",
     "png-to-ico": "^3.0.1",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
   },
   "dependencies": {
     "bootstrap": "^5.3.8",

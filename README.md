@@ -196,6 +196,58 @@ This is a pre-built portable application. To modify or rebuild:
 - Purchase & Refinance tabs now delegate to this shared engine (see `calculateMortgage`), ensuring consistency with comparison scoring logic.
 - Engine output is persisted on each tab as `tabData.builderResult` for future export/report extensions.
 
+### Unified Engine & PMI Semantics
+
+`ScheduleBuilder` produces a canonical object containing payment, payoff, escrow, PMI, and acceleration deltas. Key PMI rules:
+
+| pmiMeta.pmiEndsMonth | Meaning                                                   |
+| -------------------- | --------------------------------------------------------- |
+| 1                    | PMI never charged (not applicable at origination or cash) |
+| >1                   | First PMI-FREE month (month after last charged PMI)       |
+| null                 | (Edge) PMI would never terminate within modeled span      |
+
+The PMI monthly input is pre-computed outside the builder so alternative PMI rate sourcing can be plugged in without touching amortization code.
+
+### Down Payment Sync Logic
+
+Two-way sync between dollar amount and percent fields uses drift thresholds:
+
+- < $1 change in amount => percent not recomputed
+- < 0.01% change in percent => amount not recomputed
+- Percent clamped softly to 99.99 to avoid pathological 100% divisions
+- Last edited side wins when property value changes
+
+Pure module: `purchase/DownPaymentSync.js` exposes `processEdit(state, edit)` for deterministic testing.
+
+### Headless Purchase Scenario Logic
+
+`purchase/PurchaseLogic.js` wraps ScheduleBuilder providing loanAmount, initial LTV, and normalized PMI metadata (forcing `pmiEndsMonth=1` when PMI is not applicable). This enables logic tests without DOM side-effects.
+
+### PMI Classification
+
+`purchase/PMIClassification.js` returns a semantic state machine with states: pending | none | active | ignored | possible plus badge classes (ltv-pending, ltv-cash, ltv-good, ltv-borderline, ltv-high). This isolates UI messaging from calculation concerns.
+
+### Regression Testing Strategy
+
+Logic test suites (Jest) cover:
+
+- Core amortization & PMI scenarios (threshold edges, zero interest, acceleration)
+- Down payment sync drift & precedence rules (10 scenarios)
+- PMI classification / visibility states
+- Snapshot regression: `purchaseSnapshot.test.js` writes `purchase.snapshot.json` on first run then enforces stable canonical metrics (amount, monthlyPI, pmiEndsMonth, monthsSaved, etc.).
+
+To intentionally update snapshot: delete file (or future ENV flag), run tests twice, commit with rationale.
+
+### Guardrails & Validation
+
+Run-time safeguards:
+
+- Property value extremely low vs previous -> confirm
+- Term > 40 years -> warning banner
+- Extra payment > monthly P&I multiple thresholds -> advisory
+
+These are implemented at the UI layer but calculation outcomes are validated by tests to remain invariant.
+
 ---
 
 <div align="center">
