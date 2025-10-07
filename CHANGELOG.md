@@ -10,6 +10,48 @@
 - Phase interest split metrics: `totalInterestDrawPhase`, `totalInterestRepayPhase` consumed by PDF/CSV exporters.
 - README section documenting HELOC assumptions, data contract & future roadmap.
 
+### Blended Tab Phase 1 (P1-1 .. P1-6)
+
+#### Added
+
+- (P1-5) Transparency layer: `assumptions[]` (helocPhaseDefaults, effectiveRateMethod, zeroRateHandling, roundingNormalization) and `flags` (`zeroRateHandled`, later merged with schedule flags) included in blended result payload.
+- (P1-2) Unified blended amortization schedule now includes all additional components via per-row `additionalComponents` array and aggregated principal/interest totals.
+- (P1-4) Rounding normalization logic ensuring final component and combined balances terminate at exact $0.00 with tolerance absorption (<$5 residual) and minimal distortion (<$1 total payment delta aim).
+- (P1-6) New deterministic snapshot `P1-6 snapshot assumptions & flags baseline` locking transparency surface (sorted keys, rationale intentionally omitted for stability).
+
+#### Changed
+
+- (P1-1) Additional HELOC components re-modeled from flawed full-term interest-only (could yield negative totalInterest) to two-phase draw (interest-only) + repay (amortizing) approach (defaults draw=120 months, repay=240 months) producing positive totalInterest and full principal retirement.
+- (P1-2) Combined schedule semantics expanded: legacy omission of additional components replaced by full reconciliation of principal across all blended components.
+- (P1-4) Final payment principal allocation can be adjusted slightly to absorb rounding residue, eliminating historical small trailing balances.
+
+#### Fixed
+
+- (P1-1) Negative total interest artifact for additional HELOC components removed (now strictly > 0 when rate > 0).
+- (P1-3) Zero-rate (r≈0) scenarios no longer risk divide-by-zero; linear amortization path yields payment = principal/term and zero totalInterest.
+- (P1-4) Residual tiny balances (<$5) after amortization eliminated; balances now consistently 0.00 at schedule end.
+
+#### Transparency & Flags
+
+- Flags introduced / merged over Phase 1: `scheduleIncludesAdditional` (P1-2), `normalizationApplied` (P1-4), `zeroRateHandled` (P1-5). P1-6 snapshot guards against accidental addition/removal without intentional review.
+- Assumption keys captured with phase provenance for future comparative audits (effective rate methodology slated for revision Phase 3).
+
+#### Testing & Snapshots
+
+- Baseline Phase 0 snapshots preserved; new snapshot for P1-6 adds assumptions & flags baseline without mutating earlier metric snapshots.
+- Added tests validating: positive additional HELOC interest (P1-1), schedule reconciliation & inclusion (P1-2), zero-rate linear amortization (P1-3), residual normalization (P1-4), presence & correctness of assumptions/flags (P1-5), and transparency snapshot stability (P1-6).
+
+#### Migration / Consumer Impact
+
+- API Surface: Blended calculation results now include `assumptions` array and `flags` object — downstream consumers should ignore unknown assumption keys / flags (forward compatible) and may safely feature-detect.
+- Metrics: Additional HELOC `totalInterest` increases vs Phase 0 baseline (previously negative) reflecting corrected cost modeling; combined schedule totals now include additional components (historical partial totals deprecated).
+- Final Payment: Slight last-payment principal adjustment possible; consumers relying on prior small residual balances should update logic to treat ending balance = 0 authoritative.
+
+#### Notes
+
+- Effective blended rate remains principal-weighted pending Phase 3 (P3-2) payment-weighted method; assumption entry added to snapshot to document planned change.
+- Two-phase HELOC helper is temporary; unification into shared engine targeted for Phase 2 (P2-2).
+
 ### Changed
 
 - Rounding: sub-cent final principal payment now merged into penultimate amortizing row to produce cleaner terminal balance (flagged by `roundingAdjusted`).

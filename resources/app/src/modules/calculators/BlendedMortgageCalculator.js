@@ -77,6 +77,16 @@ class BlendedMortgageCalculator {
         additionalCosts: totalAdditionalCosts,
         combined: combinedResults,
         ltv: ltvMetrics,
+        assumptions: this.buildAssumptions({
+          firstMortgage: firstMortgageResult,
+          secondMortgage: secondMortgageResult,
+          additionalComponents: additionalComponentResults,
+        }),
+        flags: this.buildInitialFlags({
+          firstMortgage: firstMortgageResult,
+          secondMortgage: secondMortgageResult,
+          additionalComponents: additionalComponentResults,
+        }),
         calculatedAt: new Date().toISOString(),
       };
 
@@ -85,6 +95,75 @@ class BlendedMortgageCalculator {
       console.error("Blended mortgage calculation error:", error);
       throw error;
     }
+  }
+
+  /**
+   * Build assumptions array (Phase 1 transparency)
+   * Each assumption: { key, value, phase, rationale }
+   */
+  buildAssumptions(context) {
+    const assumptions = [];
+    // HELOC phase defaults
+    const anyHeloc = [
+      context.secondMortgage,
+      ...(context.additionalComponents || []),
+    ].filter((c) => c && c.type === "heloc");
+    if (anyHeloc.length) {
+      // Capture unique phase structures
+      const phaseSignatures = new Set();
+      anyHeloc.forEach((c) => {
+        const draw = c.drawMonths || 120;
+        const repay = c.repayMonths || 240;
+        phaseSignatures.add(`${draw}/${repay}`);
+      });
+      assumptions.push({
+        key: "helocPhaseDefaults",
+        value: Array.from(phaseSignatures).join(","),
+        phase: "P1",
+        rationale:
+          "HELOC modeled as draw + amortizing repay (defaults 120/240 when unspecified).",
+      });
+    }
+    // Effective blended rate method
+    assumptions.push({
+      key: "effectiveRateMethod",
+      value: "principalWeightedAverageNominal",
+      phase: "pre-P3",
+      rationale:
+        "Simple principal-weighted average before payment-weighted upgrade (P3-2).",
+    });
+    // Zero-rate handling presence
+    assumptions.push({
+      key: "zeroRateHandling",
+      value: "linearAmortizationWhenRate≈0",
+      phase: "P1-3",
+      rationale: "Avoid division by zero; pay principal evenly over term.",
+    });
+    // Rounding normalization
+    assumptions.push({
+      key: "roundingNormalization",
+      value: "absorbResidual<5ToFinalPayment",
+      phase: "P1-4",
+      rationale:
+        "Guarantee terminal balance ~0 without material payment distortion.",
+    });
+    return assumptions;
+  }
+
+  /**
+   * Build initial flags object before schedule generation mutates/extends
+   */
+  buildInitialFlags(context) {
+    const flags = {};
+    const zeroRatePresent = [
+      context.firstMortgage,
+      context.secondMortgage,
+      ...(context.additionalComponents || []),
+    ].some(
+      (c) => c && Math.abs((c.rate || 0) / 100 / 12) < 1e-12 && c.amount > 0
+    );
+    if (zeroRatePresent) flags.zeroRateHandled = true;
+    return flags;
   }
 
   /**
@@ -107,14 +186,17 @@ class BlendedMortgageCalculator {
 
     const monthlyRate = rate / 100 / 12;
     const numPayments = term * 12;
-
-    // Calculate monthly payment using standard mortgage formula
-    const monthlyPayment =
-      (amount * monthlyRate * Math.pow(1 + monthlyRate, numPayments)) /
-      (Math.pow(1 + monthlyRate, numPayments) - 1);
-
+    let monthlyPayment;
+    if (Math.abs(monthlyRate) < 1e-12) {
+      monthlyPayment = amount / numPayments; // Zero-rate: straight-line principal repayment
+    } else {
+      monthlyPayment =
+        (amount * monthlyRate * Math.pow(1 + monthlyRate, numPayments)) /
+        (Math.pow(1 + monthlyRate, numPayments) - 1);
+    }
     const totalPaid = monthlyPayment * numPayments;
-    const totalInterest = totalPaid - amount;
+    const totalInterest =
+      Math.abs(monthlyRate) < 1e-12 ? 0 : totalPaid - amount;
 
     return {
       amount,
@@ -153,45 +235,72 @@ class BlendedMortgageCalculator {
     switch (type) {
       case "heloc":
         // Interest-only payment for HELOC
-        monthlyPayment = (amount * rate) / 100 / 12;
-        // For display purposes, assume 10-year draw period + 20-year repayment
-        const drawPeriodInterest = monthlyPayment * 10 * 12;
-        const repaymentMonthlyRate = rate / 100 / 12;
-        const repaymentPayments = 20 * 12;
-        const repaymentMonthlyPayment =
-          (amount *
-            repaymentMonthlyRate *
-            Math.pow(1 + repaymentMonthlyRate, repaymentPayments)) /
-          (Math.pow(1 + repaymentMonthlyRate, repaymentPayments) - 1);
-        const repaymentTotalPaid = repaymentMonthlyPayment * repaymentPayments;
-        totalInterest = drawPeriodInterest + (repaymentTotalPaid - amount);
-        totalPaid = amount + totalInterest;
-        payoffTime = { years: 30, months: 0 };
+        {
+          const drawMonths = 10 * 12;
+          const repaymentPayments = 20 * 12;
+          const repaymentMonthlyRate = rate / 100 / 12;
+          if (Math.abs(repaymentMonthlyRate) < 1e-12) {
+            // Zero-rate HELOC: no interest; principal repaid evenly after draw
+            monthlyPayment = 0; // during draw
+            totalInterest = 0;
+            totalPaid = amount; // only principal
+            payoffTime = { years: 30, months: 0 };
+          } else {
+            monthlyPayment = (amount * rate) / 100 / 12; // interest-only draw payment
+            const drawPeriodInterest = monthlyPayment * drawMonths;
+            const repaymentMonthlyPayment =
+              (amount *
+                repaymentMonthlyRate *
+                Math.pow(1 + repaymentMonthlyRate, repaymentPayments)) /
+              (Math.pow(1 + repaymentMonthlyRate, repaymentPayments) - 1);
+            const repaymentTotalPaid =
+              repaymentMonthlyPayment * repaymentPayments;
+            totalInterest = drawPeriodInterest + (repaymentTotalPaid - amount);
+            totalPaid = amount + totalInterest;
+            payoffTime = { years: 30, months: 0 };
+          }
+        }
         break;
 
       case "fixed":
         // Fixed term loan
-        const monthlyRate = rate / 100 / 12;
-        const numPayments = term * 12;
-        monthlyPayment =
-          (amount * monthlyRate * Math.pow(1 + monthlyRate, numPayments)) /
-          (Math.pow(1 + monthlyRate, numPayments) - 1);
-        totalPaid = monthlyPayment * numPayments;
-        totalInterest = totalPaid - amount;
+        {
+          const monthlyRate = rate / 100 / 12;
+          const numPayments = term * 12;
+          if (Math.abs(monthlyRate) < 1e-12) {
+            monthlyPayment = amount / numPayments;
+            totalPaid = amount;
+            totalInterest = 0;
+          } else {
+            monthlyPayment =
+              (amount * monthlyRate * Math.pow(1 + monthlyRate, numPayments)) /
+              (Math.pow(1 + monthlyRate, numPayments) - 1);
+            totalPaid = monthlyPayment * numPayments;
+            totalInterest = totalPaid - amount;
+          }
+        }
         payoffTime = { years: term, months: 0 };
         break;
 
       case "variable":
         // Variable rate - use current rate for estimation
-        const varMonthlyRate = rate / 100 / 12;
-        const varNumPayments = term * 12;
-        monthlyPayment =
-          (amount *
-            varMonthlyRate *
-            Math.pow(1 + varMonthlyRate, varNumPayments)) /
-          (Math.pow(1 + varMonthlyRate, varNumPayments) - 1);
-        totalPaid = monthlyPayment * varNumPayments;
-        totalInterest = totalPaid - amount;
+        {
+          const varMonthlyRate = rate / 100 / 12;
+          const varNumPayments = term * 12;
+          if (Math.abs(varMonthlyRate) < 1e-12) {
+            monthlyPayment = amount / varNumPayments;
+            totalPaid = amount;
+            totalInterest = 0;
+          } else {
+            monthlyPayment =
+              (amount *
+                varMonthlyRate *
+                Math.pow(1 + varMonthlyRate, varNumPayments)) /
+              (Math.pow(1 + varMonthlyRate, varNumPayments) - 1);
+            totalPaid = monthlyPayment * varNumPayments;
+            totalInterest = totalPaid - amount;
+          }
+        }
         payoffTime = { years: term, months: 0 };
         break;
 
@@ -236,25 +345,63 @@ class BlendedMortgageCalculator {
     let payoffTime = { years: 0, months: 0 };
 
     switch (type) {
-      case "heloc":
-        // HELOC - interest only payments for draw period, then amortization
-        monthlyPayment = (amount * rate) / 100 / 12;
-        // Note: This is simplified - real HELOCs have draw and repayment periods
-        totalPaid = monthlyPayment * term * 12; // Interest only estimate
-        totalInterest = totalPaid - amount;
-        payoffTime = { years: term, months: 0 };
-        break;
+      case "heloc": {
+        // Two-phase (draw + repayment) model for additional HELOC components
+        const drawMonths = componentData.drawMonths || 120; // default 10 years
+        const repayMonths = componentData.repayMonths || 240; // default 20 years
+        const monthlyRate = rate / 100 / 12;
+        if (Math.abs(monthlyRate) < 1e-12) {
+          // Zero-rate: no interest during draw, straight-line principal repayment during repay phase
+          const amortPayment = amount / repayMonths;
+          totalInterest = 0;
+          totalPaid = amount;
+          monthlyPayment = amortPayment; // representative repayment phase payment
+        } else {
+          const ioPayment = amount * monthlyRate; // draw phase interest-only payment
+          const drawInterest = ioPayment * drawMonths;
+          const amortPayment =
+            (amount * monthlyRate * Math.pow(1 + monthlyRate, repayMonths)) /
+            (Math.pow(1 + monthlyRate, repayMonths) - 1);
+          const repayTotalPaid = amortPayment * repayMonths;
+          const repayInterest = repayTotalPaid - amount;
+          totalInterest = drawInterest + repayInterest;
+          totalPaid = amount + totalInterest;
+          // Expose draw phase payment to mirror main HELOC display semantics
+          monthlyPayment = ioPayment;
+        }
+        payoffTime = { years: (drawMonths + repayMonths) / 12, months: 0 };
+        return {
+          amount,
+          rate,
+          type,
+          term,
+          monthlyPayment,
+          totalInterest,
+          totalPaid,
+          payoffTime,
+          drawMonths,
+          repayMonths,
+        };
+      }
 
       case "fixed":
       default:
         // Fixed term loan (same calculation as regular mortgage)
-        const monthlyRate = rate / 100 / 12;
-        const numPayments = term * 12;
-        monthlyPayment =
-          (amount * monthlyRate * Math.pow(1 + monthlyRate, numPayments)) /
-          (Math.pow(1 + monthlyRate, numPayments) - 1);
-        totalPaid = monthlyPayment * numPayments;
-        totalInterest = totalPaid - amount;
+        {
+          const monthlyRate = rate / 100 / 12;
+          const numPayments = term * 12;
+          if (Math.abs(monthlyRate) < 1e-12) {
+            monthlyPayment = amount / numPayments;
+            totalPaid = amount;
+            totalInterest = 0;
+          } else {
+            monthlyPayment =
+              (amount * monthlyRate * Math.pow(1 + monthlyRate, numPayments)) /
+              (Math.pow(1 + monthlyRate, numPayments) - 1);
+            totalPaid = monthlyPayment * numPayments;
+            totalInterest = totalPaid - amount;
+          }
+        }
         payoffTime = { years: term, months: 0 };
         break;
     }
@@ -268,6 +415,46 @@ class BlendedMortgageCalculator {
       totalInterest,
       totalPaid,
       payoffTime,
+    };
+  }
+
+  /**
+   * Helper producing two-phase HELOC interest/payment characteristics (not yet wiring schedules here).
+   * @param {number} amount
+   * @param {number} annualRatePercent
+   * @param {number} drawMonths
+   * @param {number} repayMonths
+   * @returns {{drawInterest:number, repayInterest:number, totalInterest:number, amortPayment:number, interestOnlyPayment:number}}
+   */
+  buildTwoPhaseHeloc(
+    amount,
+    annualRatePercent,
+    drawMonths = 120,
+    repayMonths = 240
+  ) {
+    const r = annualRatePercent / 100 / 12;
+    if (Math.abs(r) < 1e-12) {
+      return {
+        drawInterest: 0,
+        repayInterest: 0,
+        totalInterest: 0,
+        amortPayment: amount / repayMonths,
+        interestOnlyPayment: 0,
+      };
+    }
+    const interestOnlyPayment = amount * r;
+    const drawInterest = interestOnlyPayment * drawMonths;
+    const amortPayment =
+      (amount * r * Math.pow(1 + r, repayMonths)) /
+      (Math.pow(1 + r, repayMonths) - 1);
+    const repayTotalPaid = amortPayment * repayMonths;
+    const repayInterest = repayTotalPaid - amount;
+    return {
+      drawInterest,
+      repayInterest,
+      totalInterest: drawInterest + repayInterest,
+      amortPayment,
+      interestOnlyPayment,
     };
   }
 
@@ -470,8 +657,8 @@ class BlendedMortgageCalculator {
       errors.push("First mortgage amount must be greater than 0");
     }
 
-    if (!firstMortgage.rate || firstMortgage.rate <= 0) {
-      errors.push("First mortgage interest rate must be greater than 0");
+    if (firstMortgage.rate == null || firstMortgage.rate < 0) {
+      errors.push("First mortgage interest rate must be >= 0");
     }
 
     if (firstMortgage.rate > 50) {
@@ -485,7 +672,9 @@ class BlendedMortgageCalculator {
     // Second mortgage validation (optional)
     if (secondMortgage.amount && secondMortgage.amount > 0) {
       if (!secondMortgage.rate || secondMortgage.rate <= 0) {
-        errors.push("Second mortgage interest rate must be greater than 0");
+        if (secondMortgage.rate == null || secondMortgage.rate < 0) {
+          errors.push("Second mortgage interest rate must be >= 0");
+        }
       }
 
       if (secondMortgage.rate > 50) {
@@ -523,14 +712,25 @@ class BlendedMortgageCalculator {
       this.calculateBlendedMortgage(params);
     }
 
-    const { firstMortgage, secondMortgage } = this.calculationResults;
+    const {
+      firstMortgage,
+      secondMortgage,
+      additionalComponents = [],
+    } = this.calculationResults;
 
     // Generate schedules for each component
     const firstSchedule = this.generateComponentSchedule(firstMortgage);
     const secondSchedule = this.generateComponentSchedule(secondMortgage);
+    const additionalSchedules = additionalComponents.map((c) =>
+      this.generateComponentSchedule(c)
+    );
 
     // Combine schedules
-    const maxPayments = Math.max(firstSchedule.length, secondSchedule.length);
+    const maxPayments = Math.max(
+      firstSchedule.length,
+      secondSchedule.length,
+      ...additionalSchedules.map((s) => s.length)
+    );
     const combinedSchedule = [];
 
     for (let i = 0; i < maxPayments; i++) {
@@ -545,6 +745,28 @@ class BlendedMortgageCalculator {
         remainingBalance: 0,
       };
 
+      const additionalRows = additionalSchedules.map(
+        (sched) =>
+          sched[i] || {
+            principalPayment: 0,
+            interestPayment: 0,
+            remainingBalance: 0,
+          }
+      );
+
+      const additionalPrincipalSum = additionalRows.reduce(
+        (s, r) => s + r.principalPayment,
+        0
+      );
+      const additionalInterestSum = additionalRows.reduce(
+        (s, r) => s + r.interestPayment,
+        0
+      );
+      const additionalBalanceSum = additionalRows.reduce(
+        (s, r) => s + r.remainingBalance,
+        0
+      );
+
       combinedSchedule.push({
         paymentNumber: i + 1,
         firstMortgage: {
@@ -557,20 +779,107 @@ class BlendedMortgageCalculator {
           interest: secondPayment.interestPayment,
           balance: secondPayment.remainingBalance,
         },
+        additionalComponents: additionalRows.map((r, idx) => ({
+          principal: r.principalPayment,
+          interest: r.interestPayment,
+          balance: r.remainingBalance,
+          index: idx,
+        })),
         totalPrincipal:
-          firstPayment.principalPayment + secondPayment.principalPayment,
+          firstPayment.principalPayment +
+          secondPayment.principalPayment +
+          additionalPrincipalSum,
         totalInterest:
-          firstPayment.interestPayment + secondPayment.interestPayment,
+          firstPayment.interestPayment +
+          secondPayment.interestPayment +
+          additionalInterestSum,
         totalPayment:
           firstPayment.principalPayment +
           firstPayment.interestPayment +
           secondPayment.principalPayment +
-          secondPayment.interestPayment,
+          secondPayment.interestPayment +
+          additionalPrincipalSum +
+          additionalInterestSum,
         totalRemainingBalance:
-          firstPayment.remainingBalance + secondPayment.remainingBalance,
+          firstPayment.remainingBalance +
+          secondPayment.remainingBalance +
+          additionalBalanceSum,
       });
     }
-
+    // Rounding normalization (P1-4): Adjust tiny residual combined balance by modifying final principal components.
+    if (combinedSchedule.length > 0) {
+      const lastRow = combinedSchedule[combinedSchedule.length - 1];
+      const residual = lastRow.totalRemainingBalance;
+      if (residual > 0.01 && residual < 5) {
+        // Distribute residual across components prioritizing largest remaining balance contributor
+        // (Should usually only happen on one component due to amort logic.)
+        let remainingToAllocate = residual;
+        // Helper to adjust a component and update aggregates
+        const applyAdjustment = (principalFieldPath) => {
+          if (remainingToAllocate <= 0) return;
+          const segments = principalFieldPath.split(".");
+          let ctx = lastRow;
+          for (let i = 0; i < segments.length - 1; i++) ctx = ctx[segments[i]];
+          const leafKey = segments[segments.length - 1];
+          const currentPrincipal = ctx[leafKey];
+          // Increase principal payment to absorb residual
+          ctx[leafKey] = currentPrincipal + remainingToAllocate;
+          remainingToAllocate = 0;
+        };
+        // Try first, then second, then additional components
+        if (remainingToAllocate > 0 && lastRow.firstMortgage.balance > 0) {
+          applyAdjustment("firstMortgage.principal");
+        } else if (
+          remainingToAllocate > 0 &&
+          lastRow.secondMortgage.balance > 0
+        ) {
+          applyAdjustment("secondMortgage.principal");
+        } else if (remainingToAllocate > 0) {
+          // Find first additional component with balance >0
+          const target = lastRow.additionalComponents.find(
+            (c) => c.balance > 0
+          );
+          if (target) {
+            const idx = target.index;
+            applyAdjustment(`additionalComponents.${idx}.principal`);
+          }
+        }
+        // Set balances to zero post adjustment
+        lastRow.firstMortgage.balance = 0;
+        lastRow.secondMortgage.balance = 0;
+        lastRow.additionalComponents.forEach((c) => (c.balance = 0));
+        lastRow.totalRemainingBalance = 0;
+        // Recompute aggregate principal / payment on last row
+        const addPrin = lastRow.additionalComponents.reduce(
+          (s, c) => s + c.principal,
+          0
+        );
+        const addInt = lastRow.additionalComponents.reduce(
+          (s, c) => s + c.interest,
+          0
+        );
+        lastRow.totalPrincipal =
+          lastRow.firstMortgage.principal +
+          lastRow.secondMortgage.principal +
+          addPrin;
+        lastRow.totalPayment = lastRow.totalPrincipal + lastRow.totalInterest; // interest unchanged by normalization
+      } else if (residual > 0 && residual <= 0.01) {
+        // Clean trivial residual without adjusting payment amounts (treat as floating-point noise)
+        lastRow.firstMortgage.balance = 0;
+        lastRow.secondMortgage.balance = 0;
+        lastRow.additionalComponents.forEach((c) => (c.balance = 0));
+        lastRow.totalRemainingBalance = 0;
+      }
+    }
+    // Attach flag to results
+    this.calculationResults = {
+      ...this.calculationResults,
+      flags: {
+        ...(this.calculationResults.flags || {}),
+        scheduleIncludesAdditional: true,
+        normalizationApplied: true,
+      },
+    };
     return combinedSchedule;
   }
 
@@ -587,75 +896,126 @@ class BlendedMortgageCalculator {
     const { amount, rate, term, type } = component;
 
     if (type === "heloc") {
-      // HELOC typically has interest-only payments during draw period
+      // Support both main second-mortgage HELOC (fixed 10/20) and additional HELOCs (with drawMonths/repayMonths metadata)
+      const drawMonths = component.drawMonths || 120; // default 10 years
+      const repayMonths = component.repayMonths || 240; // default 20 years
+      const r = rate / 100 / 12;
       const schedule = [];
-      const monthlyInterest = (amount * rate) / 100 / 12;
 
-      // 10-year draw period (interest only)
-      for (let i = 1; i <= 120; i++) {
+      if (Math.abs(r) < 1e-12) {
+        // Zero-rate: draw phase has no payments (interest = 0), repayment straight-line
+        for (let i = 1; i <= drawMonths; i++) {
+          schedule.push({
+            paymentNumber: i,
+            principalPayment: 0,
+            interestPayment: 0,
+            remainingBalance: amount,
+          });
+        }
+        const amortPrincipalPayment = amount / repayMonths;
+        let remainingBalance = amount;
+        for (let j = 1; j <= repayMonths; j++) {
+          const paymentNumber = drawMonths + j;
+          let principalPayment = amortPrincipalPayment;
+          if (principalPayment > remainingBalance)
+            principalPayment = remainingBalance;
+          remainingBalance -= principalPayment;
+          schedule.push({
+            paymentNumber,
+            principalPayment,
+            interestPayment: 0,
+            remainingBalance: Math.max(0, remainingBalance),
+          });
+          if (remainingBalance <= 0.01) break;
+        }
+        return schedule;
+      }
+
+      // Draw phase: interest-only
+      const ioInterestPayment = amount * r;
+      for (let i = 1; i <= drawMonths; i++) {
         schedule.push({
           paymentNumber: i,
           principalPayment: 0,
-          interestPayment: monthlyInterest,
+          interestPayment: ioInterestPayment,
           remainingBalance: amount,
         });
       }
-
-      // 20-year repayment period
-      const repaymentRate = rate / 100 / 12;
-      const repaymentPayments = 240;
+      // Repay phase: amortization
+      const amortPayment =
+        (amount * r * Math.pow(1 + r, repayMonths)) /
+        (Math.pow(1 + r, repayMonths) - 1);
       let remainingBalance = amount;
-
-      const monthlyPayment =
-        (amount *
-          repaymentRate *
-          Math.pow(1 + repaymentRate, repaymentPayments)) /
-        (Math.pow(1 + repaymentRate, repaymentPayments) - 1);
-
-      for (let i = 121; i <= 360; i++) {
-        const interestPayment = remainingBalance * repaymentRate;
-        const principalPayment = monthlyPayment - interestPayment;
+      for (let j = 1; j <= repayMonths; j++) {
+        const paymentNumber = drawMonths + j;
+        const interestPayment = remainingBalance * r;
+        let principalPayment = amortPayment - interestPayment;
+        if (principalPayment > remainingBalance)
+          principalPayment = remainingBalance;
         remainingBalance -= principalPayment;
-
         schedule.push({
-          paymentNumber: i,
+          paymentNumber,
           principalPayment,
           interestPayment,
           remainingBalance: Math.max(0, remainingBalance),
         });
-
         if (remainingBalance <= 0.01) break;
       }
-
+      // Component-level normalization (if tiny balance remains)
+      if (remainingBalance > 0.01 && remainingBalance < 5) {
+        const last = schedule[schedule.length - 1];
+        last.principalPayment += remainingBalance;
+        last.remainingBalance = 0;
+      } else if (remainingBalance > 0 && remainingBalance <= 0.01) {
+        const last = schedule[schedule.length - 1];
+        last.remainingBalance = 0;
+      }
       return schedule;
     } else {
-      // Standard fixed-rate amortization
-      const monthlyRate = rate / 100 / 12;
-      const numPayments = term * 12;
-      const monthlyPayment = component.monthlyPayment;
-
-      const schedule = [];
-      let remainingBalance = amount;
-
-      for (let i = 1; i <= numPayments && remainingBalance > 0.01; i++) {
-        const interestPayment = remainingBalance * monthlyRate;
-        let principalPayment = monthlyPayment - interestPayment;
-
-        if (principalPayment > remainingBalance) {
-          principalPayment = remainingBalance;
-        }
-
-        remainingBalance -= principalPayment;
-
-        schedule.push({
-          paymentNumber: i,
-          principalPayment,
-          interestPayment,
-          remainingBalance: Math.max(0, remainingBalance),
+      // Standard fixed-rate amortization (delegated to FixedAmortization util)
+      try {
+        // Lazy import to avoid circular refs in some bundlers
+        const {
+          computeFixedAmortization,
+        } = require("./amortization/FixedAmortization");
+        const termMonths = term * 12;
+        const result = computeFixedAmortization({
+          principal: amount,
+          annualRate: rate,
+          termMonths,
+          payment: component.monthlyPayment, // maintain existing pre-computed payment parity
         });
+        return result.schedule;
+      } catch (e) {
+        // Fallback to previous inline logic if import fails (defensive)
+        const monthlyRate = rate / 100 / 12;
+        const numPayments = term * 12;
+        const monthlyPayment = component.monthlyPayment;
+        const schedule = [];
+        let remainingBalance = amount;
+        for (let i = 1; i <= numPayments && remainingBalance > 0.01; i++) {
+          const interestPayment = remainingBalance * monthlyRate;
+          let principalPayment = monthlyPayment - interestPayment;
+          if (principalPayment > remainingBalance)
+            principalPayment = remainingBalance;
+          remainingBalance -= principalPayment;
+          schedule.push({
+            paymentNumber: i,
+            principalPayment,
+            interestPayment,
+            remainingBalance: Math.max(0, remainingBalance),
+          });
+        }
+        if (remainingBalance > 0.01 && remainingBalance < 5) {
+          const last = schedule[schedule.length - 1];
+          last.principalPayment += remainingBalance;
+          last.remainingBalance = 0;
+        } else if (remainingBalance > 0 && remainingBalance <= 0.01) {
+          const last = schedule[schedule.length - 1];
+          last.remainingBalance = 0;
+        }
+        return schedule;
       }
-
-      return schedule;
     }
   }
 

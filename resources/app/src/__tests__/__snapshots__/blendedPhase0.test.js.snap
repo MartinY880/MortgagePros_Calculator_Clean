@@ -1,0 +1,85 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`BlendedMortgageCalculator Phase 0 Baseline P0-1 fixed + fixed scenario snapshot 1`] = `
+{
+  "combined": {
+    "effectiveBlendedRate": 6.38,
+    "totalInterest": 414376.79,
+    "totalMonthlyPayment": 2725.66,
+    "totalPaid": 814376.79,
+  },
+  "first": {
+    "monthly": 1798.65,
+    "totalInterest": 347514.57,
+    "totalPaid": 647514.57,
+  },
+  "ltv": {
+    "combined": 80,
+    "first": 60,
+  },
+  "second": {
+    "monthly": 927.01,
+    "totalInterest": 66862.22,
+    "totalPaid": 166862.22,
+  },
+}
+`;
+
+exports[`BlendedMortgageCalculator Phase 0 Baseline P0-2 fixed + HELOC scenario snapshot (10/20 assumed) 1`] = `
+{
+  "combinedMonthly": 2950.72,
+  "effectiveBlendedRate": 6.59,
+  "firstMonthly": 1750.72,
+  "helocMonthlyInterestOnly": 1200,
+  "helocTotalInterest": 325342.11,
+  "helocTotalPaid": 505342.11,
+}
+`;
+
+exports[`BlendedMortgageCalculator Phase 0 Baseline P1-1 fixed + HELOC + additional HELOC (two-phase additional HELOC) 1`] = `
+{
+  "additionalHelocMonthlyDrawPhase": 375,
+  "additionalHelocTotalInterest": 102967.11,
+  "additionalHelocTotalPaid": 152967.11,
+  "baseMonthly": 1847.15,
+  "combinedMonthly": 2826.32,
+  "helocMonthly": 604.17,
+}
+`;
+
+exports[`BlendedMortgageCalculator Phase 0 Baseline P1-6 snapshot assumptions & flags baseline 1`] = `
+{
+  "assumptionKeys": [
+    "effectiveRateMethod",
+    "helocPhaseDefaults",
+    "roundingNormalization",
+    "zeroRateHandling",
+  ],
+  "assumptions": [
+    {
+      "key": "effectiveRateMethod",
+      "phase": "pre-P3",
+      "value": "principalWeightedAverageNominal",
+    },
+    {
+      "key": "helocPhaseDefaults",
+      "phase": "P1",
+      "value": "120/240,60/180",
+    },
+    {
+      "key": "roundingNormalization",
+      "phase": "P1-4",
+      "value": "absorbResidual<5ToFinalPayment",
+    },
+    {
+      "key": "zeroRateHandling",
+      "phase": "P1-3",
+      "value": "linearAmortizationWhenRate≈0",
+    },
+  ],
+  "flags": {
+    "normalizationApplied": true,
+    "scheduleIncludesAdditional": true,
+  },
+}
+`;

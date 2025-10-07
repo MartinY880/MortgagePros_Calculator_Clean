@@ -368,6 +368,26 @@ Testing:
 
 ---
 
+### Blended Tab Phase 1 Enhancements (Unreleased)
+
+The blended mortgage calculator received its first corrective + transparency wave (P1-1 .. P1-6). Key user-visible improvements:
+
+| Area                      | Before (Phase 0)                                                   | After (Phase 1)                                                                               |
+| ------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Additional HELOC Modeling | Flawed full-term interest-only could yield negative total interest | Two‑phase (draw interest-only, then amortizing repay) with positive total interest            |
+| Combined Schedule         | Omitted additional components                                      | Unified schedule includes all additional components (per-row breakdown)                       |
+| Zero-Rate Edge            | Not handled (risk divide-by-zero)                                  | Linear amortization fallback (payment = principal/term)                                       |
+| Final Balances            | Small residuals (<$5) tolerated                                    | Normalized to exact $0.00 with residue absorption                                             |
+| Transparency              | No assumptions or flags surfaced                                   | `assumptions[]` + `flags` (scheduleIncludesAdditional, normalizationApplied, zeroRateHandled) |
+
+New snapshot: `P1-6 snapshot assumptions & flags baseline` protects the transparency surface (sorted keys; rationale intentionally excluded to minimize churn). Downstream integrators should ignore unknown assumption keys/flags for forward compatibility.
+
+See CHANGELOG (Unreleased / Blended Tab Phase 1) for migration notes and API additions.
+
+Planned next (Phase 2): fixed amortization utility extraction, unified HELOC engine reuse, component registry, assumption object formalization, and initial warning taxonomy.
+
+---
+
 ---
 
 <div align="center">
